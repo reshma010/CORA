@@ -1,0 +1,89 @@
+QMainWindow {
+    background-color: #f3f7f6;
+    font-family: 'Trebuchet MS', sans-serif;
+    font-size: 15px;
+    color: #0f1614;
+}
+
+/* Sidebar navigation */
+QFrame#sidebar {
+    background-color: #0c554a;
+    min-width: 200px;
+    max-width: 200px;
+    border: none;
+    box-shadow: 0 2px 8px rgba(15,22,20,0.15);
+}
+
+QPushButton#navButton {
+    background-color: transparent;
+    color: #f3f7f6;
+    text-align: left;
+    padding: 12px 20px;
+    border: none;
+    font-size: 15px;
+    letter-spacing: 0.5px;
+    transition: background 0.2s, color 0.2s;
+}
+
+QPushButton#navButton:hover {
+    background-color: #b2a48f;
+    color: #0f1614;
+}
+
+/* Top bar */
+QFrame#topbar {
+    background-color: #f3f7f6;
+    border-bottom: 1px solid #b2a48f;
+    padding: 12px 24px;
+    box-shadow: 0 2px 4px rgba(15,22,20,0.08);
+}
+
+/* Dashboard cards */
+QFrame#card {
+    background-color: #f3f7f6;
+    border-radius: 16px;
+    padding: 20px;
+    border: 2px solid #b2a48f;
+    box-shadow: 0 2px 8px rgba(15,22,20,0.10);
+    transition: box-shadow 0.2s;
+}
+QFrame#card:hover {
+    box-shadow: 0 4px 16px rgba(15,22,20,0.16);
+    border-color: #0c554a;
+}
+
+/* Buttons */
+QPushButton {
+    background-color: #0c554a;
+    color: #f3f7f6;
+    padding: 12px 24px;
+    border-radius: 20px;
+    border: none;
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 4px rgba(12,85,74,0.15);
+    transition: background 0.2s, box-shadow 0.2s;
+    max-width: 250px;
+}
+
+QPushButton:hover {
+    background-color: #edbc2c;
+    color: #0f1614;
+    box-shadow: 0 4px 8px rgba(237,188,44,0.20);
+}
+
+/* Input fields */
+QLineEdit {
+    border: 2px solid #b2a48f;
+    border-radius: 20px;
+    padding: 10px 15px;
+    font-size: 14px;
+    background-color: #f3f7f6;
+    color: #0f1614;
+}
+
+QLineEdit:focus {
+    border: 2px solid #0c554a;
+}
+
