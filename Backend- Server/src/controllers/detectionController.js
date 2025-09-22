@@ -45,44 +45,51 @@ const receiveDetections = async (req, res) => {
       return sendError(res, 'Detections must be a non-empty array', 400);
     }
 
-    // Find or create robot
-    console.log(' DATABASE: Searching for robot with unit_id:', unit_id);
-    let robot = await Robot.findByUnitId(unit_id);
+    // Find or create robot using atomic upsert for consistency
+    console.log(' DATABASE: Looking up or creating robot with unit_id:', unit_id);
     
-    if (!robot) {
-      console.log('DATABASE: Robot not found, creating new robot unit');
-      console.log('DATABASE: New robot data:', {
-        unit_id,
-        unit_name,
-        rtsp_uris: rtsp_uris || [],
-        status: 'online'
-      });
-      
-      robot = new Robot({
-        unit_id,
+    try {
+      // Use atomic upsert to handle race conditions and duplicate key errors
+      const robot = await Robot.upsertByUnitId(unit_id, {
         unit_name,
         rtsp_uris: rtsp_uris || [],
         status: 'online',
-        last_seen: new Date(),
-        detections: []
+        $setOnInsert: { detections: [] }
       });
       
-      console.log('DATABASE: Robot object created, about to save...');
-    } else {
-      console.log(' DATABASE: Found existing robot:', {
+      console.log('DATABASE: Robot upserted successfully:', {
         id: robot._id,
         unit_id: robot.unit_id,
         unit_name: robot.unit_name,
         existing_detections: robot.detections.length
       });
       
-      // Update robot info
-      robot.unit_name = unit_name;
-      robot.rtsp_uris = rtsp_uris || robot.rtsp_uris;
-      robot.last_seen = new Date();
-      robot.status = 'online';
+      // Store robot for later use
+      req.robot = robot;
       
-      console.log(' DATABASE: Updated robot info');
+    } catch (upsertError) {
+      if (upsertError.code === 11000) {
+        console.log('DATABASE: Duplicate key error detected, attempting cleanup and retry...');
+        
+        // Try to clean up database and retry once
+        try {
+          await Robot.cleanupDatabase();
+          const robot = await Robot.upsertByUnitId(unit_id, {
+            unit_name,
+            rtsp_uris: rtsp_uris || [],
+            status: 'online',
+            $setOnInsert: { detections: [] }
+          });
+          
+          console.log('DATABASE: Robot upserted successfully after cleanup:', robot._id);
+          req.robot = robot;
+        } catch (retryError) {
+          console.error('DATABASE: Failed even after cleanup:', retryError);
+          throw retryError;
+        }
+      } else {
+        throw upsertError;
+      }
     }
 
     // Validate each detection
@@ -135,12 +142,28 @@ const receiveDetections = async (req, res) => {
     console.log(' DATABASE: Validated detections count:', validatedDetections.length);
     console.log(' DATABASE: Sample detection:', validatedDetections[0]);
     
-    const saveResult = await robot.addDetections(validatedDetections);
+    // Use atomic update to add detections and avoid race conditions
+    const updateResult = await Robot.findByIdAndUpdate(
+      req.robot._id,
+      { 
+        $push: { detections: { $each: validatedDetections } },
+        $set: { 
+          last_seen: new Date(),
+          status: 'online'
+        }
+      },
+      { new: true }
+    );
     
-    console.log(' DATABASE: Save operation completed');
-    console.log(' DATABASE: Save result:', !!saveResult);
-    console.log(' DATABASE: Robot after save - total detections:', robot.detections.length);
-    console.log(' DATABASE: Robot ID after save:', robot._id);
+    if (!updateResult) {
+      throw new Error('Failed to update robot with new detections');
+    }
+    
+    const robot = updateResult;
+    
+    console.log(' DATABASE: Atomic update completed');
+    console.log(' DATABASE: Robot after update - total detections:', robot.detections.length);
+    console.log(' DATABASE: Robot ID after update:', robot._id);
 
     console.log(' ROBOT DATA: Successfully saved robot detections');
     console.log(` ROBOT DATA: Saved ${validatedDetections.length}/${detections.length} detections`);

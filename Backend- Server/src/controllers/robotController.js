@@ -328,6 +328,25 @@ const updateHealth = async (req, res) => {
   }
 };
 
+// @desc    Clean up database inconsistencies
+// @route   POST /api/robots/cleanup
+// @access  Admin only
+const cleanupDatabase = async (req, res) => {
+  try {
+    console.log('ADMIN: Database cleanup requested');
+    
+    const result = await Robot.cleanupDatabase();
+    
+    console.log('ADMIN: Database cleanup completed:', result);
+    
+    sendSuccess(res, 'Database cleanup completed successfully', result);
+
+  } catch (error) {
+    console.error('Database cleanup error:', error);
+    sendServerError(res, 'Error during database cleanup');
+  }
+};
+
 module.exports = {
   getRobots,
   getRobot,
@@ -337,5 +356,6 @@ module.exports = {
   addDetection,
   getDetections,
   addRtspStream,
-  updateHealth
+  updateHealth,
+  cleanupDatabase
 };

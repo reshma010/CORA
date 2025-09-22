@@ -255,9 +255,70 @@ robotSchema.statics.getActiveRobots = function(minutesThreshold = 5) {
   return this.find({ last_seen: { $gte: thresholdTime } }).sort({ last_seen: -1 });
 };
 
-// Static method to get robot by unit_id
+// Static method to get robot by unit_id with better error handling
 robotSchema.statics.findByUnitId = function(unitId) {
+  if (!unitId) {
+    throw new Error('Unit ID is required for robot lookup');
+  }
   return this.findOne({ unit_id: unitId });
+};
+
+// Static method to safely upsert robot
+robotSchema.statics.upsertByUnitId = function(unitId, robotData) {
+  if (!unitId) {
+    throw new Error('Unit ID is required for robot upsert');
+  }
+  return this.findOneAndUpdate(
+    { unit_id: unitId },
+    { 
+      ...robotData,
+      unit_id: unitId,
+      last_seen: new Date()
+    },
+    { 
+      upsert: true, 
+      new: true,
+      runValidators: true,
+      setDefaultsOnInsert: true
+    }
+  );
+};
+
+// Static method to clean up database inconsistencies
+robotSchema.statics.cleanupDatabase = async function() {
+  console.log('DATABASE: Starting cleanup of inconsistent robot data...');
+  
+  try {
+    // Remove any documents that don't have a valid unit_id
+    const deleteResult = await this.deleteMany({
+      $or: [
+        { unit_id: { $exists: false } },
+        { unit_id: null },
+        { unit_id: "" }
+      ]
+    });
+    
+    console.log(`DATABASE: Removed ${deleteResult.deletedCount} invalid robot documents`);
+    
+    // Ensure indexes are properly set
+    await this.collection.createIndex({ unit_id: 1 }, { unique: true, background: true });
+    console.log('DATABASE: Ensured unique index on unit_id');
+    
+    // Drop any old indexes that might conflict
+    try {
+      await this.collection.dropIndex('robotId_1');
+      console.log('DATABASE: Dropped old robotId index');
+    } catch (err) {
+      // Index might not exist, which is fine
+      console.log('DATABASE: Old robotId index not found (this is expected)');
+    }
+    
+    console.log('DATABASE: Cleanup completed successfully');
+    return { success: true, deletedCount: deleteResult.deletedCount };
+  } catch (error) {
+    console.error('DATABASE: Error during cleanup:', error);
+    throw error;
+  }
 };
 
 // Pre-save middleware to update stats cache

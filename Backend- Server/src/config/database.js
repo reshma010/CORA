@@ -27,6 +27,17 @@ const connectDB = async () => {
     const collections = await conn.connection.db.listCollections().toArray();
     console.log('DATABASE: Available collections:', collections.map(c => c.name));
 
+    // Run database cleanup on startup to fix any inconsistencies
+    try {
+      const Robot = require('../models/Robot');
+      console.log('DATABASE: Running startup cleanup...');
+      const cleanupResult = await Robot.cleanupDatabase();
+      console.log('DATABASE: Startup cleanup completed:', cleanupResult);
+    } catch (cleanupError) {
+      console.error('DATABASE: Startup cleanup failed:', cleanupError.message);
+      // Don't exit - continue with potentially inconsistent data
+    }
+
   } catch (error) {
     console.error('DATABASE: Connection error:', error.message);
     console.error('DATABASE: Error details:', error);

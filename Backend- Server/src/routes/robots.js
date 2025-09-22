@@ -9,7 +9,8 @@ const {
   addDetection,
   getDetections,
   addRtspStream,
-  updateHealth
+  updateHealth,
+  cleanupDatabase
 } = require('../controllers/robotController');
 const auth = require('../middleware/auth');
 
@@ -17,13 +18,14 @@ const router = express.Router();
 
 // Validation rules
 const robotValidation = [
-  body('robotId')
-    .matches(/^CORA-[A-Z0-9]{4,}$/)
-    .withMessage('Robot ID must follow format: CORA-XXXX'),
-  body('name')
+  body('unit_id')
+    .trim()
+    .isLength({ min: 1, max: 50 })
+    .withMessage('Unit ID is required and must be between 1 and 50 characters'),
+  body('unit_name')
     .trim()
     .isLength({ min: 2, max: 100 })
-    .withMessage('Robot name must be between 2 and 100 characters'),
+    .withMessage('Unit name must be between 2 and 100 characters'),
   body('model')
     .trim()
     .isLength({ min: 1, max: 50 })
@@ -159,5 +161,10 @@ router.post('/:id/streams', [...mongoIdValidation, ...rtspStreamValidation], add
 // @desc    Update robot health status
 // @access  Private
 router.put('/:id/health', mongoIdValidation, updateHealth);
+
+// @route   POST /api/robots/cleanup
+// @desc    Clean up database inconsistencies (admin only)
+// @access  Admin
+router.post('/cleanup', cleanupDatabase);
 
 module.exports = router;

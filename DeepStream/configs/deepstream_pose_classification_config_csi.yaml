@@ -1,0 +1,48 @@
+################################################################################
+# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+################################################################################
+
+source-list:
+   list: csi://0?width=1920&height=1080&fps=30
+
+streammux:
+  width: 1280
+  height: 720
+  batched-push-timeout: 40000
+
+tracker:
+  enable: 1
+  ll-lib-file: /opt/nvidia/deepstream/deepstream/lib/libnvds_nvmultiobjecttracker.so
+  ll-config-file: config_tracker_pose_classification.yml
+
+primary-gie:
+  plugin-type: 0
+  config-file-path: config_infer_primary_peoplenet.txt
+
+secondary-gie0:
+  plugin-type: 0
+  config-file-path: config_infer_secondary_bodypose3dnet.txt
+
+secondary-preprocess1:
+  config-file-path: config_preprocess_bodypose_classification.txt
+
+secondary-gie1:
+  plugin-type: 0
+  config-file-path: config_infer_third_bodypose_classification.txt
+
+sink:
+  #0 fakesink 
+  #1 filesink generate the out.mp4 file in the current directory
+  #2 rtspsink publish at rtsp://localhost:8554/ds-test
+  #3 displaysink
+  sink-type: 3
+  #encoder type 0=Hardware 1=Software
+  enc-type: 1
