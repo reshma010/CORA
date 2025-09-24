@@ -1,28 +1,28 @@
 //Oleg Korobeyko
-const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 
 class EmailService {
   constructor() {
-    this.transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-      port: process.env.EMAIL_PORT || 587,
-      secure: false, // true for 465, false for other ports
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      },
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
+    // Set SendGrid API key
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    
+    // Log configuration status
+    if (process.env.SENDGRID_API_KEY) {
+      console.log('SendGrid API key configured');
+    } else {
+      console.error('SENDGRID_API_KEY environment variable is missing');
+    }
   }
 
   async sendEmailVerification(email, name, verificationToken) {
     const verificationUrl = `https://corabackend.onrender.com/api/auth/verify-email/${verificationToken}`;
     
     const mailOptions = {
-      from: `"CORA System" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
       to: email,
+      from: {
+        email: process.env.EMAIL_FROM || process.env.EMAIL_USER || 'noreply@cora.com',
+        name: 'CORA System'
+      },
       subject: 'CORA - Verify Email Address',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -62,19 +62,22 @@ class EmailService {
     };
 
     try {
-      const info = await this.transporter.sendMail(mailOptions);
-      console.log(` VERIFICATION email sent to ${email}:`, info.messageId);
-      return { success: true, messageId: info.messageId };
+      const result = await sgMail.send(mailOptions);
+      console.log(`VERIFICATION email sent to ${email} via SendGrid`);
+      return { success: true, messageId: result[0].headers['x-message-id'] };
     } catch (error) {
-      console.error(' VERIFICATION email send error:', error);
+      console.error('VERIFICATION email send error:', error.response?.body || error.message);
       return { success: false, error: error.message };
     }
   }
 
   async sendWelcomeEmail(email, name) {
     const mailOptions = {
-      from: `"CORA System" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
       to: email,
+      from: {
+        email: process.env.EMAIL_FROM || process.env.EMAIL_USER || 'noreply@cora.com',
+        name: 'CORA System'
+      },
       subject: 'Welcome to CORA!',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -107,11 +110,11 @@ class EmailService {
     };
 
     try {
-      const info = await this.transporter.sendMail(mailOptions);
-      console.log(` WELCOME email sent to ${email}:`, info.messageId);
-      return { success: true, messageId: info.messageId };
+      const result = await sgMail.send(mailOptions);
+      console.log(`WELCOME email sent to ${email} via SendGrid`);
+      return { success: true, messageId: result[0].headers['x-message-id'] };
     } catch (error) {
-      console.error(' WELCOME email send error:', error);
+      console.error('WELCOME email send error:', error.response?.body || error.message);
       return { success: false, error: error.message };
     }
   }
@@ -120,8 +123,11 @@ class EmailService {
     const resetUrl = `https://corabackend.onrender.com/api/auth/reset-password/${resetToken}`;
     
     const mailOptions = {
-      from: `"CORA System" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
       to: email,
+      from: {
+        email: process.env.EMAIL_FROM || process.env.EMAIL_USER || 'noreply@cora.com',
+        name: 'CORA System'
+      },
       subject: 'CORA - Password Reset Request',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -166,11 +172,11 @@ class EmailService {
     };
 
     try {
-      const info = await this.transporter.sendMail(mailOptions);
-      console.log(` PASSWORD RESET email sent to ${email}:`, info.messageId);
-      return { success: true, messageId: info.messageId };
+      const result = await sgMail.send(mailOptions);
+      console.log(`PASSWORD RESET email sent to ${email} via SendGrid`);
+      return { success: true, messageId: result[0].headers['x-message-id'] };
     } catch (error) {
-      console.error(' PASSWORD RESET email send error:', error);
+      console.error('PASSWORD RESET email send error:', error.response?.body || error.message);
       return { success: false, error: error.message };
     }
   }
