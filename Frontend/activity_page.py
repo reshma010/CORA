@@ -3,30 +3,86 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QTableWidget, QTableWi
 from PyQt5.QtCore import Qt, QTimer
 import datetime
 from icon_utils import IconManager
+from theme_manager import ThemeManager
 
 class ActivityPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.theme_manager = ThemeManager()
+        
+        # Set page background
+        self.setStyleSheet(f"""
+            ActivityPage {{
+                background-color: {self.theme_manager.get_color('background')};
+            }}
+        """)
 
         #Main Layout for the Activity Page
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(20)
 
         # Title Label
         title = QLabel("Activity Logs")
         title.setAlignment(Qt.AlignCenter)  # Center the text
-        title.setStyleSheet("font-size: 20px; font-weight: bold;")  # Styling for title
+        title.setStyleSheet(f"""
+            font-size: 24px; 
+            font-weight: bold; 
+            color: {self.theme_manager.get_color('primary')};
+            font-family: 'Trebuchet MS';
+            margin: 20px 0px;
+        """)  # Styling for title
         layout.addWidget(title)
 
         # Table Widget for Logs
         self.table = QTableWidget()
         self.table.setColumnCount(3)  # 3 columns: Time, Activity, Status
         self.table.setHorizontalHeaderLabels(["Time", "Activity", "Status"])  # Set column headers
+        self.table.setStyleSheet(f"""
+            QTableWidget {{
+                background-color: {self.theme_manager.get_color('background')};
+                border: 1px solid {self.theme_manager.get_color('accent')};
+                border-radius: 10px;
+                gridline-color: {self.theme_manager.get_color('accent')};
+                font-family: 'Trebuchet MS';
+            }}
+            QTableWidget::item {{
+                padding: 8px;
+                color: {self.theme_manager.get_color('text')};
+            }}
+            QTableWidget::item:selected {{
+                background-color: {self.theme_manager.get_color('primary')};
+            }}
+            QHeaderView::section {{
+                background-color: {self.theme_manager.get_color('background')};
+                border: 1px solid {self.theme_manager.get_color('accent')};
+                padding: 8px;
+                font-weight: bold;
+                color: {self.theme_manager.get_color('text')};
+                font-family: 'Trebuchet MS';
+            }}
+        """)
         layout.addWidget(self.table)
 
         # Refresh Button with duotone icon
-        self.refresh_btn = QPushButton("Refresh Logs")
+        self.refresh_btn = QPushButton("⟲ Refresh Logs")
         IconManager.set_button_icon(self.refresh_btn, 'refresh', "Refresh Logs", size=16)
         self.refresh_btn.setFixedWidth(200)
+        self.refresh_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.theme_manager.get_color('primary')};
+                color: {self.theme_manager.get_color('text')};
+                border: none;
+                padding: 12px 20px;
+                border-radius: 8px;
+                font-weight: bold;
+                font-size: 14px;
+                font-family: 'Trebuchet MS';
+            }}
+            QPushButton:hover {{
+                background-color: {self.theme_manager.get_color('secondary')};
+            }}
+        """)
         # Connect button click to reload logs
         self.refresh_btn.clicked.connect(self.load_logs)
         layout.addWidget(self.refresh_btn, 0, Qt.AlignCenter)
