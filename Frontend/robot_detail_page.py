@@ -6,97 +6,230 @@ from datetime import datetime, timedelta
 import json
 from api_client import api_client
 import sys
+import platform
+from theme_manager import ThemeManager
 
-class StreamWidget(QWidget):
+# Try to import VLC
+try:
+    import vlc
+    VLC_AVAILABLE = True
+except ImportError:
+    VLC_AVAILABLE = False
+
+class StreamWidget(QFrame):
     """
-    Enhanced widget to display a single RTSP stream with status and statistics
-    Shows placeholder for now, can be extended with actual video display
+    Enhanced widget to display a single RTSP stream with actual video playback
+    Uses VLC for real-time RTSP stream display
     """
     
     def __init__(self, rtsp_uri, stream_number, detection_data=None, parent=None):
         super().__init__(parent)
+        self.theme_manager = ThemeManager()
         self.rtsp_uri = rtsp_uri
         self.stream_number = stream_number
         self.detection_data = detection_data or []
         
+        # VLC components
+        self.instance = None
+        self.player = None
+        
         self.setup_ui()
+        if VLC_AVAILABLE:
+            self.setup_vlc()
+            # Auto-start playback after widget is shown
+            QTimer.singleShot(1000, self.start_playback)
         
     def setup_ui(self):
         """Setup the stream widget UI"""
         self.setFixedSize(320, 240)
-        self.setStyleSheet("""
-            QWidget {
-                background-color: #2c3e50;
-                border: 2px solid #34495e;
+        self.setStyleSheet(f"""
+            QFrame {{
+                background-color: {self.theme_manager.get_color('primary')};
+                border: 2px solid {self.theme_manager.get_color('secondary')};
                 border-radius: 8px;
-                color: white;
-            }
+                color: {self.theme_manager.get_color('background')};
+            }}
+            QFrame:hover {{
+                border: 2px solid {self.theme_manager.get_color('accent')};
+                cursor: pointer;
+            }}
         """)
         
+        # Set cursor to indicate clickability
+        self.setCursor(Qt.PointingHandCursor)
+        
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(4)
         
         # Header with stream info
         header_layout = QHBoxLayout()
         
         # Stream title
         title_label = QLabel(f"Camera {self.stream_number}")
-        title_label.setStyleSheet("font-size: 14px; font-weight: bold; color: white;")
+        title_label.setStyleSheet(f"font-size: 12px; font-weight: bold; color: {self.theme_manager.get_color('background')}; font-family: 'Trebuchet MS';")
         header_layout.addWidget(title_label)
         
         header_layout.addStretch()
         
         # Status indicator
-        status_label = QLabel("ACTIVE")
-        status_label.setStyleSheet("color: #27ae60; font-size: 10px; font-weight: bold;")
-        status_label.setToolTip("Stream Active")
-        header_layout.addWidget(status_label)
+        self.status_label = QLabel("CONNECTING")
+        self.status_label.setStyleSheet(f"color: {self.theme_manager.get_color('accent')}; font-size: 9px; font-weight: bold; font-family: 'Trebuchet MS';")
+        self.status_label.setToolTip("Stream Status")
+        header_layout.addWidget(self.status_label)
         
         layout.addLayout(header_layout)
         
         # Video area
-        video_area = QLabel()
-        video_area.setMinimumHeight(120)
-        video_area.setStyleSheet("""
-            QLabel {
-                background-color: #1a1a1a;
-                border: 1px solid #555;
+        self.video_frame = QFrame()
+        self.video_frame.setMinimumHeight(140)
+        self.video_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: #000000;
+                border: 1px solid {self.theme_manager.get_color('highlight')};
                 border-radius: 4px;
-                color: #bbb;
-            }
+            }}
         """)
-        video_area.setText("Video Feed\n(Available)")
-        video_area.setAlignment(Qt.AlignCenter)
-        layout.addWidget(video_area)
+        layout.addWidget(self.video_frame)
         
-        # Stream statistics
-        stats_layout = QHBoxLayout()
+        # Bottom info layout
+        bottom_layout = QHBoxLayout()
         
         # Recent detections count
         recent_count = len([d for d in self.detection_data if self.is_recent_detection(d)])
-        detections_label = QLabel(f"Detections: {recent_count}")
-        detections_label.setStyleSheet("font-size: 10px; color: #bdc3c7;")
-        stats_layout.addWidget(detections_label)
+        detections_label = QLabel(f"Det: {recent_count}")
+        detections_label.setStyleSheet(f"font-size: 9px; color: {self.theme_manager.get_color('background')}; font-family: 'Trebuchet MS';")
+        bottom_layout.addWidget(detections_label)
         
-        stats_layout.addStretch()
+        bottom_layout.addStretch()
         
-        # Stream resolution
-        resolution_label = QLabel("1080p")
-        resolution_label.setStyleSheet("font-size: 10px; color: #bdc3c7;")
-        stats_layout.addWidget(resolution_label)
+        # Stream resolution (will be updated when video plays)
+        self.resolution_label = QLabel("720p")
+        self.resolution_label.setStyleSheet(f"font-size: 9px; color: {self.theme_manager.get_color('background')}; font-family: 'Trebuchet MS';")
+        bottom_layout.addWidget(self.resolution_label)
         
-        layout.addLayout(stats_layout)
+        layout.addLayout(bottom_layout)
         
         # URI display (truncated)
         uri_display = self.rtsp_uri
-        if len(uri_display) > 35:
-            uri_display = uri_display[:32] + "..."
-            
-        uri_label = QLabel(uri_display)
-        uri_label.setStyleSheet("font-size: 9px; color: #7f8c8d; font-family: monospace;")
-        uri_label.setWordWrap(True)
-        layout.addWidget(uri_label)
+        if len(uri_display) > 30:
+            uri_display = uri_display[:27] + "..."
         
+        uri_label = QLabel(uri_display)
+        uri_label.setStyleSheet(f"font-size: 8px; color: {self.theme_manager.get_color('highlight')}; font-family: 'Trebuchet MS';")
+        uri_label.setToolTip(self.rtsp_uri)
+        layout.addWidget(uri_label)
+
+    def setup_vlc(self):
+        """Initialize VLC player"""
+        try:
+            # Create VLC instance with options
+            vlc_args = [
+                '--no-xlib',
+                '--network-caching=300',  # 300ms network cache
+                '--rtsp-tcp',  # Force TCP for RTSP
+                '--quiet',
+                '--no-video-title-show'
+            ]
+            
+            self.instance = vlc.Instance(vlc_args)
+            self.player = self.instance.media_player_new()
+            
+            # Platform-specific video output setup
+            import platform
+            if platform.system() == "Darwin":  # macOS
+                # Use native macOS video output
+                self.player.set_nsobject(int(self.video_frame.winId()))
+            elif platform.system() == "Windows":
+                self.player.set_hwnd(int(self.video_frame.winId()))
+            else:  # Linux
+                self.player.set_xwindow(int(self.video_frame.winId()))
+                
+            # Set up event handling
+            self.event_manager = self.player.event_manager()
+            self.event_manager.event_attach(vlc.EventType.MediaPlayerMediaChanged, self.on_media_changed)
+            self.event_manager.event_attach(vlc.EventType.MediaPlayerPlaying, self.on_playing)
+            self.event_manager.event_attach(vlc.EventType.MediaPlayerEncounteredError, self.on_error)
+            
+        except Exception as e:
+            print(f"Failed to setup VLC: {e}")
+            self.status_label.setText("VLC ERROR")
+            self.status_label.setStyleSheet("color: #e74c3c; font-size: 9px; font-weight: bold;")
+
+    def start_playback(self):
+        """Start playing the RTSP stream"""
+        if not VLC_AVAILABLE or not self.player:
+            self.status_label.setText("NO VLC")
+            self.status_label.setStyleSheet(f"color: {self.theme_manager.get_color('secondary')}; font-size: 9px; font-weight: bold; font-family: 'Trebuchet MS';")
+            return
+            
+        try:
+            # Create media with RTSP options
+            media = self.instance.media_new(self.rtsp_uri)
+            media.add_option(':network-caching=300')
+            media.add_option(':rtsp-tcp')
+            
+            self.player.set_media(media)
+            self.player.play()
+            
+            self.status_label.setText("LOADING")
+            self.status_label.setStyleSheet(f"color: {self.theme_manager.get_color('accent')}; font-size: 9px; font-weight: bold; font-family: 'Trebuchet MS';")
+            
+        except Exception as e:
+            print(f"Failed to start playback: {e}")
+            self.status_label.setText("ERROR")
+            self.status_label.setStyleSheet(f"color: {self.theme_manager.get_color('secondary')}; font-size: 9px; font-weight: bold; font-family: 'Trebuchet MS';")
+
+    def on_media_changed(self, event):
+        """Handle media changed event"""
+        print(f"Stream {self.stream_number}: Media changed")
+
+    def on_playing(self, event):
+        """Handle playing event"""
+        print(f"Stream {self.stream_number}: Now playing")
+        self.status_label.setText("ACTIVE")
+        self.status_label.setStyleSheet(f"color: {self.theme_manager.get_color('primary')}; font-size: 9px; font-weight: bold; font-family: 'Trebuchet MS';")
+
+    def on_error(self, event):
+        """Handle error event"""
+        print(f"Stream {self.stream_number}: Playback error")
+        self.status_label.setText("ERROR")
+        self.status_label.setStyleSheet(f"color: {self.theme_manager.get_color('secondary')}; font-size: 9px; font-weight: bold; font-family: 'Trebuchet MS';")
+
+    def stop_playback(self):
+        """Stop the video playback"""
+        if self.player:
+            self.player.stop()
+            self.status_label.setText("STOPPED")
+            self.status_label.setStyleSheet(f"color: {self.theme_manager.get_color('highlight')}; font-size: 9px; font-weight: bold; font-family: 'Trebuchet MS';")
+
+    def restart_playback(self):
+        """Restart the video playback"""
+        if self.player:
+            self.stop_playback()
+            QTimer.singleShot(500, self.start_playback)
+        
+    def is_recent_detection(self, detection):
+        """Check if detection is recent (within last 24 hours)"""
+        try:
+            # Assuming detection has a timestamp field
+            detection_time = detection.get('timestamp', detection.get('created_at', ''))
+            if detection_time:
+                # Simple recent check - you can adjust the logic based on your timestamp format
+                return True  # Placeholder - implement actual time comparison
+        except:
+            pass
+        return False
+
+    def closeEvent(self, event):
+        """Clean up VLC resources when widget is closed"""
+        if self.player:
+            self.player.stop()
+            self.player.release()
+        if self.instance:
+            self.instance.release()
+        event.accept()
+
     def is_recent_detection(self, detection):
         """Check if detection is from the last hour"""
         try:
@@ -105,6 +238,233 @@ class StreamWidget(QWidget):
             return detection_time > datetime.now().replace(tzinfo=detection_time.tzinfo) - timedelta(hours=1)
         except:
             return False
+
+    def mousePressEvent(self, event):
+        """Handle mouse press to expand stream"""
+        if event.button() == Qt.LeftButton:
+            self.expand_stream()
+        super().mousePressEvent(event)
+
+    def expand_stream(self):
+        """Open expanded view of the stream"""
+        dialog = ExpandedStreamDialog(self.rtsp_uri, self.stream_number, self.detection_data, self)
+        dialog.exec_()
+
+
+class ExpandedStreamDialog(QDialog):
+    """
+    Dialog to show expanded/fullscreen view of RTSP stream
+    """
+    
+    def __init__(self, rtsp_uri, stream_number, detection_data=None, parent=None):
+        super().__init__(parent)
+        self.theme_manager = ThemeManager()
+        self.rtsp_uri = rtsp_uri
+        self.stream_number = stream_number
+        self.detection_data = detection_data or []
+        
+        # VLC components
+        self.instance = None
+        self.player = None
+        
+        self.setup_ui()
+        if VLC_AVAILABLE:
+            self.setup_vlc()
+            # Auto-start playback after dialog is shown
+            QTimer.singleShot(1000, self.start_playback)
+    
+    def setup_ui(self):
+        """Setup the expanded stream dialog UI"""
+        self.setWindowTitle(f"Camera {self.stream_number} - Expanded View")
+        self.setModal(True)
+        self.resize(1000, 700)
+        
+        # Apply theme colors
+        self.setStyleSheet(f"""
+            QDialog {{
+                background-color: {self.theme_manager.get_color('background')};
+                color: {self.theme_manager.get_color('text')};
+            }}
+        """)
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        
+        # Header with stream info
+        header_frame = QFrame()
+        header_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {self.theme_manager.get_color('primary')};
+                border-radius: 8px;
+                padding: 10px;
+            }}
+        """)
+        header_layout = QHBoxLayout(header_frame)
+        
+        # Stream title
+        title_label = QLabel(f"Camera {self.stream_number} - Live Stream")
+        title_label.setFont(QFont("Trebuchet MS", 16, QFont.Bold))
+        title_label.setStyleSheet(f"color: {self.theme_manager.get_color('background')}; padding: 5px;")
+        header_layout.addWidget(title_label)
+        
+        header_layout.addStretch()
+        
+        # Status indicator
+        self.status_label = QLabel("CONNECTING")
+        self.status_label.setFont(QFont("Trebuchet MS", 12, QFont.Bold))
+        self.status_label.setStyleSheet(f"color: {self.theme_manager.get_color('accent')}; padding: 5px;")
+        header_layout.addWidget(self.status_label)
+        
+        layout.addWidget(header_frame)
+        
+        # Video area
+        self.video_frame = QFrame()
+        self.video_frame.setMinimumHeight(400)
+        self.video_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: #000000;
+                border: 2px solid {self.theme_manager.get_color('secondary')};
+                border-radius: 8px;
+            }}
+        """)
+        layout.addWidget(self.video_frame)
+        
+        # Bottom info layout
+        bottom_frame = QFrame()
+        bottom_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {self.theme_manager.get_color('highlight')};
+                border-radius: 8px;
+                padding: 10px;
+            }}
+        """)
+        bottom_layout = QHBoxLayout(bottom_frame)
+        
+        # Stream URI
+        uri_label = QLabel(f"Stream: {self.rtsp_uri}")
+        uri_label.setFont(QFont("Trebuchet MS", 10))
+        uri_label.setStyleSheet(f"color: {self.theme_manager.get_color('text')};")
+        bottom_layout.addWidget(uri_label)
+        
+        bottom_layout.addStretch()
+        
+        # Recent detections count
+        recent_count = len([d for d in self.detection_data if self.is_recent_detection(d)])
+        detections_label = QLabel(f"Recent Detections: {recent_count}")
+        detections_label.setFont(QFont("Trebuchet MS", 10))
+        detections_label.setStyleSheet(f"color: {self.theme_manager.get_color('text')};")
+        bottom_layout.addWidget(detections_label)
+        
+        layout.addWidget(bottom_frame)
+        
+        # Close button
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        
+        close_button = QPushButton("Close")
+        close_button.setFont(QFont("Trebuchet MS", 12))
+        close_button.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.theme_manager.get_color('secondary')};
+                color: {self.theme_manager.get_color('background')};
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {self.theme_manager.get_color('accent')};
+            }}
+        """)
+        close_button.clicked.connect(self.close)
+        button_layout.addWidget(close_button)
+        
+        layout.addLayout(button_layout)
+    
+    def setup_vlc(self):
+        """Initialize VLC player for expanded view"""
+        try:
+            # Create VLC instance with options
+            vlc_args = [
+                '--intf=dummy',
+                '--no-video-title-show',
+                '--no-xlib',
+                '--rtsp-tcp',  # Force TCP for RTSP
+            ]
+            
+            self.instance = vlc.Instance(vlc_args)
+            self.player = self.instance.media_player_new()
+            
+            # Set the widget for video output
+            if platform.system() == "Linux":
+                self.player.set_xwindow(int(self.video_frame.winId()))
+            elif platform.system() == "Windows":
+                self.player.set_hwnd(int(self.video_frame.winId()))
+            elif platform.system() == "Darwin":  # macOS
+                self.player.set_nsobject(int(self.video_frame.winId()))
+            
+            # Set up event handlers
+            event_manager = self.player.event_manager()
+            event_manager.event_attach(vlc.EventType.MediaPlayerPlaying, self.on_playing)
+            event_manager.event_attach(vlc.EventType.MediaPlayerEncounteredError, self.on_error)
+            
+        except Exception as e:
+            print(f"Failed to initialize VLC: {e}")
+            self.status_label.setText("VLC ERROR")
+            self.status_label.setStyleSheet(f"color: {self.theme_manager.get_color('secondary')}; font-weight: bold; font-family: 'Trebuchet MS';")
+    
+    def start_playback(self):
+        """Start playing the RTSP stream"""
+        if not VLC_AVAILABLE or not self.player:
+            self.status_label.setText("NO VLC")
+            self.status_label.setStyleSheet(f"color: {self.theme_manager.get_color('secondary')}; font-weight: bold; font-family: 'Trebuchet MS';")
+            return
+            
+        try:
+            # Create media with RTSP options
+            media = self.instance.media_new(self.rtsp_uri)
+            media.add_option(':network-caching=300')
+            media.add_option(':rtsp-tcp')
+            
+            self.player.set_media(media)
+            self.player.play()
+            
+            self.status_label.setText("LOADING")
+            self.status_label.setStyleSheet(f"color: {self.theme_manager.get_color('accent')}; font-weight: bold; font-family: 'Trebuchet MS';")
+            
+        except Exception as e:
+            print(f"Failed to start playback: {e}")
+            self.status_label.setText("ERROR")
+            self.status_label.setStyleSheet(f"color: {self.theme_manager.get_color('secondary')}; font-weight: bold; font-family: 'Trebuchet MS';")
+    
+    def on_playing(self, event):
+        """Handle playing event"""
+        self.status_label.setText("LIVE")
+        self.status_label.setStyleSheet(f"color: {self.theme_manager.get_color('primary')}; font-weight: bold; font-family: 'Trebuchet MS';")
+    
+    def on_error(self, event):
+        """Handle error event"""
+        self.status_label.setText("STREAM ERROR")
+        self.status_label.setStyleSheet(f"color: {self.theme_manager.get_color('secondary')}; font-weight: bold; font-family: 'Trebuchet MS';")
+    
+    def is_recent_detection(self, detection):
+        """Check if detection is from the last hour"""
+        try:
+            from datetime import datetime, timedelta
+            detection_time = datetime.fromisoformat(detection.get('timestamp', '').replace('Z', '+00:00'))
+            return detection_time > datetime.now().replace(tzinfo=detection_time.tzinfo) - timedelta(hours=1)
+        except:
+            return False
+    
+    def closeEvent(self, event):
+        """Clean up VLC resources when dialog is closed"""
+        if self.player:
+            self.player.stop()
+            self.player.release()
+        if self.instance:
+            self.instance.release()
+        event.accept()
 
 
 class DetectionItemWidget(QWidget):
@@ -302,10 +662,19 @@ class DetectionItemWidget(QWidget):
             import base64
             from io import BytesIO
             
+            print(f"DEBUG: Thumbnail data length: {len(thumbnail_data)}")
+            print(f"DEBUG: Thumbnail data starts with: {thumbnail_data[:50]}")
+            
             # Decode base64 image
             image_data = base64.b64decode(thumbnail_data)
+            print(f"DEBUG: Decoded image data length: {len(image_data)}")
+            
+            # Try alternative loading methods
             pixmap = QPixmap()
-            pixmap.loadFromData(image_data)
+            success = pixmap.loadFromData(image_data, "JPEG")
+            print(f"DEBUG: QPixmap.loadFromData success: {success}")
+            print(f"DEBUG: Pixmap size: {pixmap.size().width()}x{pixmap.size().height()}")
+            print(f"DEBUG: Pixmap isNull: {pixmap.isNull()}")
             
             if not pixmap.isNull():
                 # Scale the image to a reasonable thumbnail size
@@ -313,21 +682,45 @@ class DetectionItemWidget(QWidget):
                 
                 image_label = QLabel()
                 image_label.setPixmap(scaled_pixmap)
+                image_label.setFixedSize(82, 62)  # Fixed size to prevent layout issues
+                image_label.setScaledContents(False)  # Don't scale contents automatically
+                image_label.setAlignment(Qt.AlignCenter)  # Center the image
                 image_label.setStyleSheet("""
-                    border: 1px solid #bdc3c7;
-                    border-radius: 3px;
-                    background-color: white;
-                    padding: 2px;
+                    QLabel {
+                        border: 1px solid #bdc3c7;
+                        border-radius: 3px;
+                        background-color: #f8f9fa;
+                        padding: 1px;
+                    }
                 """)
                 thumbnail_layout.addWidget(image_label)
+                print("DEBUG: Successfully created thumbnail image")
+                
+                # Additional debug: save the scaled pixmap to verify it's correct
+                try:
+                    scaled_pixmap.save("/tmp/debug_scaled_thumbnail.png", "PNG")
+                    print("DEBUG: Saved scaled thumbnail to /tmp/debug_scaled_thumbnail.png")
+                except Exception as save_err:
+                    print(f"DEBUG: Error saving scaled thumbnail: {save_err}")
             else:
+                # Try to save the raw data to see what we're getting
+                try:
+                    with open("/tmp/debug_thumbnail.jpg", "wb") as f:
+                        f.write(image_data)
+                    print("DEBUG: Saved raw image data to /tmp/debug_thumbnail.jpg")
+                except Exception as save_err:
+                    print(f"DEBUG: Error saving debug image: {save_err}")
+                
                 # Invalid image data
-                error_label = QLabel("Invalid image data")
+                error_label = QLabel("Invalid image data - see console")
                 error_label.setStyleSheet("color: #e74c3c; font-style: italic; font-size: 10px;")
                 thumbnail_layout.addWidget(error_label)
                 
         except Exception as e:
             # Error decoding image
+            print(f"DEBUG: Exception in thumbnail creation: {e}")
+            import traceback
+            traceback.print_exc()
             error_label = QLabel(f"Error loading image: {str(e)[:20]}...")
             error_label.setStyleSheet("color: #e74c3c; font-style: italic; font-size: 10px;")
             thumbnail_layout.addWidget(error_label)
@@ -594,6 +987,7 @@ class RobotDetailPage(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.theme_manager = ThemeManager()
         self.unit_id = None
         self.unit_name = None
         self.unit_data = {}
@@ -604,24 +998,36 @@ class RobotDetailPage(QWidget):
     def setup_ui(self):
         """Setup the detail page UI"""
         main_layout = QVBoxLayout(self)
-        main_layout.setSpacing(16)
-        main_layout.setContentsMargins(16, 16, 16, 16)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
         
-        # Header with back button and title
-        header_layout = QHBoxLayout()
+        # Fixed header with back button and title
+        header_widget = QWidget()
+        header_widget.setStyleSheet("""
+            QWidget {
+                background-color: #f8fffe;
+                border-bottom: 1px solid #e8f4f2;
+                padding: 0px;
+            }
+        """)
+        header_widget.setFixedHeight(80)
         
-        self.back_button = QPushButton("<- Back to Dashboard")
+        header_layout = QHBoxLayout(header_widget)
+        header_layout.setContentsMargins(20, 16, 20, 16)
+        
+        self.back_button = QPushButton("← Back to Dashboard")
         self.back_button.setStyleSheet("""
             QPushButton {
-                background-color: #95a5a6;
+                background-color: #0c554a;
                 color: white;
                 border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
+                padding: 12px 20px;
+                border-radius: 8px;
                 font-weight: bold;
+                font-size: 14px;
             }
             QPushButton:hover {
-                background-color: #7f8c8d;
+                background-color: #094a42;
             }
         """)
         self.back_button.clicked.connect(self.back_requested.emit)
@@ -630,49 +1036,118 @@ class RobotDetailPage(QWidget):
         header_layout.addStretch()
         
         self.title_label = QLabel()
-        self.title_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50;")
+        self.title_label.setStyleSheet("""
+            QLabel {
+                font-size: 24px; 
+                font-weight: bold; 
+                color: #0c554a;
+                font-family: 'Trebuchet MS';
+            }
+        """)
         header_layout.addWidget(self.title_label)
         
         header_layout.addStretch()
         
         # Refresh button
-        self.refresh_button = QPushButton("Refresh")
+        self.refresh_button = QPushButton("⟲ Refresh")
         self.refresh_button.setStyleSheet("""
             QPushButton {
-                background-color: #3498db;
+                background-color: #2e7d32;
                 color: white;
                 border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
+                padding: 12px 20px;
+                border-radius: 8px;
                 font-weight: bold;
+                font-size: 14px;
             }
             QPushButton:hover {
-                background-color: #2980b9;
+                background-color: #1b5e20;
             }
         """)
         self.refresh_button.clicked.connect(self.refresh_data)
         header_layout.addWidget(self.refresh_button)
         
-        main_layout.addLayout(header_layout)
+        main_layout.addWidget(header_widget)
         
-        # Streams section
-        streams_label = QLabel("Camera Streams")
-        streams_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #2c3e50; margin-top: 16px;")
-        main_layout.addWidget(streams_label)
+        # Scrollable content area
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setStyleSheet(f"""
+            QScrollArea {{
+                border: none;
+                background-color: {self.theme_manager.get_color('background')};
+            }}
+            QScrollBar:vertical {{
+                background-color: {self.theme_manager.get_color('background')};
+                width: 12px;
+                border-radius: 6px;
+            }}
+            QScrollBar::handle:vertical {{
+                background-color: {self.theme_manager.get_color('highlight')};
+                border-radius: 6px;
+                min-height: 20px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background-color: {self.theme_manager.get_color('primary')};
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                border: none;
+                background: none;
+            }}
+        """)
         
-        self.streams_layout = QHBoxLayout()
-        self.streams_layout.setSpacing(12)
-        main_layout.addLayout(self.streams_layout)
+        # Content widget
+        content_widget = QWidget()
+        content_layout = QVBoxLayout(content_widget)
+        content_layout.setContentsMargins(20, 20, 20, 20)
+        content_layout.setSpacing(30)
         
-        # Detection Statistics Panel
-        self.stats_panel = self.create_statistics_panel()
-        main_layout.addWidget(self.stats_panel)
+        # RTSP Streams section with centered layout
+        streams_section = QWidget()
+        streams_section_layout = QVBoxLayout(streams_section)
+        streams_section_layout.setSpacing(16)
         
-        # Detections section
+        streams_label = QLabel("Live Camera Streams")
+        streams_label.setStyleSheet("""
+            QLabel {
+                font-size: 20px; 
+                font-weight: bold; 
+                color: #0c554a;
+                font-family: 'Trebuchet MS';
+                margin-bottom: 10px;
+            }
+        """)
+        streams_label.setAlignment(Qt.AlignCenter)
+        streams_section_layout.addWidget(streams_label)
+        
+        # Centered container for streams
+        streams_container = QWidget()
+        self.streams_layout = QHBoxLayout(streams_container)
+        self.streams_layout.setSpacing(20)
+        self.streams_layout.setAlignment(Qt.AlignCenter)
+        
+        streams_section_layout.addWidget(streams_container)
+        content_layout.addWidget(streams_section)
+        
+        # Detections section with more space
+        detections_section = QWidget()
+        detections_section_layout = QVBoxLayout(detections_section)
+        detections_section_layout.setSpacing(16)
+        
         detections_header_layout = QHBoxLayout()
         
         detections_label = QLabel("Recent Detections")
-        detections_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #2c3e50; margin-top: 16px;")
+        detections_label.setStyleSheet("""
+            QLabel {
+                font-size: 20px; 
+                font-weight: bold; 
+                color: #0c554a;
+                font-family: 'Trebuchet MS';
+                margin-bottom: 10px;
+            }
+        """)
         detections_header_layout.addWidget(detections_label)
         
         detections_header_layout.addStretch()
@@ -689,53 +1164,129 @@ class RobotDetailPage(QWidget):
             "Jumping"
         ])
         self.filter_combo.currentTextChanged.connect(self.filter_detections)
-        detections_header_layout.addWidget(QLabel("Filter:"))
+        self.filter_combo.setStyleSheet("""
+            QComboBox {
+                background-color: white;
+                border: 1px solid #e8f4f2;
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 14px;
+                min-width: 120px;
+            }
+            QComboBox:hover {
+                border-color: #b2dfdb;
+            }
+        """)
+        
+        filter_label = QLabel("Filter:")
+        filter_label.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                color: #6a8a7f;
+                margin-right: 8px;
+            }
+        """)
+        detections_header_layout.addWidget(filter_label)
         detections_header_layout.addWidget(self.filter_combo)
         
-        main_layout.addLayout(detections_header_layout)
+        detections_section_layout.addLayout(detections_header_layout)
         
-        # Detections list
+        # Detections list with more spacing
         self.detections_scroll = QScrollArea()
         self.detections_scroll.setWidgetResizable(True)
         self.detections_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.detections_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.detections_scroll.setMinimumHeight(400)
+        self.detections_scroll.setStyleSheet(f"""
+            QScrollArea {{
+                background-color: {self.theme_manager.get_color('background')};
+                border: none;
+                border-radius: 10px;
+            }}
+            QScrollBar:vertical {{
+                background-color: {self.theme_manager.get_color('background')};
+                width: 12px;
+                border-radius: 6px;
+            }}
+            QScrollBar::handle:vertical {{
+                background-color: {self.theme_manager.get_color('highlight')};
+                border-radius: 6px;
+                min-height: 20px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background-color: {self.theme_manager.get_color('primary')};
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                border: none;
+                background: none;
+            }}
+        """)
         
         self.detections_widget = QWidget()
         self.detections_layout = QVBoxLayout(self.detections_widget)
-        self.detections_layout.setSpacing(4)
-        self.detections_layout.setContentsMargins(8, 8, 8, 8)
+        self.detections_layout.setSpacing(12)  # More space between detections
+        self.detections_layout.setContentsMargins(16, 16, 16, 16)
         
         self.detections_scroll.setWidget(self.detections_widget)
-        main_layout.addWidget(self.detections_scroll)
+        detections_section_layout.addWidget(self.detections_scroll)
+        
+        content_layout.addWidget(detections_section)
+        
+        # Analytics section at bottom
+        self.stats_panel = self.create_statistics_panel()
+        content_layout.addWidget(self.stats_panel)
         
         # Loading indicator
-        self.loading_label = QLabel("Loading...")
+        self.loading_label = QLabel("Loading robot data...")
         self.loading_label.setAlignment(Qt.AlignCenter)
-        self.loading_label.setStyleSheet("font-size: 16px; color: #7f8c8d; padding: 40px;")
-        main_layout.addWidget(self.loading_label)
+        self.loading_label.setStyleSheet(f"""
+            QLabel {{
+                font-size: 16px; 
+                color: {self.theme_manager.get_color('accent')}; 
+                padding: 40px;
+                font-family: 'Trebuchet MS';
+                border: none;
+                outline: none;
+            }}
+        """)
+        content_layout.addWidget(self.loading_label)
+        
+        scroll_area.setWidget(content_widget)
+        main_layout.addWidget(scroll_area)
         
     def create_statistics_panel(self):
         """Create a statistics panel for detection data"""
         stats_widget = QWidget()
-        stats_widget.setStyleSheet("""
-            QWidget {
-                background-color: #f8f9fa;
-                border: 1px solid #e1e8ed;
-                border-radius: 8px;
-                margin: 8px 0px;
-            }
+        stats_widget.setStyleSheet(f"""
+            QWidget {{
+                background-color: {self.theme_manager.get_color('background')};
+                border: 1px solid {self.theme_manager.get_color('accent')};
+                border-radius: 12px;
+                margin: 0px;
+            }}
         """)
         
         stats_layout = QVBoxLayout(stats_widget)
-        stats_layout.setContentsMargins(16, 12, 16, 12)
+        stats_layout.setContentsMargins(20, 16, 20, 16)
         
         # Header
         header_label = QLabel("Detection Analytics")
-        header_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50; margin-bottom: 8px;")
+        header_label.setStyleSheet(f"""
+            QLabel {{
+                font-size: 20px; 
+                font-weight: bold; 
+                color: {self.theme_manager.get_color('primary')};
+                font-family: 'Trebuchet MS';
+                margin-bottom: 12px;
+                border: none;
+                outline: none;
+            }}
+        """)
         stats_layout.addWidget(header_label)
         
         # Create layout for stats - populated when data loads
         self.stats_content_layout = QHBoxLayout()
+        self.stats_content_layout.setSpacing(20)
         stats_layout.addLayout(self.stats_content_layout)
         
         # Initially hidden
@@ -791,15 +1342,15 @@ class RobotDetailPage(QWidget):
         # Create stats widgets
         
         # Total detections
-        total_widget = self.create_stat_widget("Total Detections", str(total_detections), "#3498db")
+        total_widget = self.create_stat_widget("Total Detections", str(total_detections), self.theme_manager.get_color('primary'))
         self.stats_content_layout.addWidget(total_widget)
         
         # Average confidence
-        conf_widget = self.create_stat_widget("Avg Confidence", f"{avg_confidence:.1%}", "#27ae60")
+        conf_widget = self.create_stat_widget("Avg Confidence", f"{avg_confidence:.1%}", self.theme_manager.get_color('secondary'))
         self.stats_content_layout.addWidget(conf_widget)
         
         # Tracking rate
-        track_widget = self.create_stat_widget("Tracking Rate", f"{tracking_rate:.1f}%", "#9b59b6")
+        track_widget = self.create_stat_widget("Tracking Rate", f"{tracking_rate:.1f}%", self.theme_manager.get_color('highlight'))
         self.stats_content_layout.addWidget(track_widget)
         
         # Most common action
@@ -808,7 +1359,7 @@ class RobotDetailPage(QWidget):
             most_common_count = action_counts[most_common]
             action_widget = self.create_stat_widget("Top Action", 
                                                   f"{most_common.replace('_', ' ').title()}\n({most_common_count})", 
-                                                  "#f39c12")
+                                                  self.theme_manager.get_color('accent'))
             self.stats_content_layout.addWidget(action_widget)
         
         # Confidence distribution chart
@@ -823,7 +1374,7 @@ class RobotDetailPage(QWidget):
         widget.setFixedSize(120, 80)
         widget.setStyleSheet(f"""
             QWidget {{
-                background-color: white;
+                background-color: {self.theme_manager.get_color('background')};
                 border: 2px solid {color};
                 border-radius: 6px;
                 margin: 4px;
@@ -841,7 +1392,7 @@ class RobotDetailPage(QWidget):
         
         # Title
         title_label = QLabel(title)
-        title_label.setStyleSheet("font-size: 10px; color: #7f8c8d; text-align: center;")
+        title_label.setStyleSheet(f"font-size: 10px; color: {self.theme_manager.get_color('accent')}; text-align: center;")
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setWordWrap(True)
         layout.addWidget(title_label)
@@ -852,13 +1403,13 @@ class RobotDetailPage(QWidget):
         """Create a mini confidence distribution chart"""
         widget = QWidget()
         widget.setFixedSize(140, 80)
-        widget.setStyleSheet("""
-            QWidget {
-                background-color: white;
-                border: 2px solid #34495e;
+        widget.setStyleSheet(f"""
+            QWidget {{
+                background-color: {self.theme_manager.get_color('background')};
+                border: 2px solid {self.theme_manager.get_color('primary')};
                 border-radius: 6px;
                 margin: 4px;
-            }
+            }}
         """)
         
         layout = QVBoxLayout(widget)
@@ -866,7 +1417,7 @@ class RobotDetailPage(QWidget):
         
         # Title
         title_label = QLabel("Confidence Levels")
-        title_label.setStyleSheet("font-size: 10px; font-weight: bold; color: #2c3e50; text-align: center;")
+        title_label.setStyleSheet(f"font-size: 10px; font-weight: bold; color: {self.theme_manager.get_color('text')}; text-align: center;")
         title_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(title_label)
         
@@ -897,7 +1448,7 @@ class RobotDetailPage(QWidget):
             
             # Label
             label = QLabel(labels[level])
-            label.setStyleSheet("font-size: 8px; color: #7f8c8d;")
+            label.setStyleSheet(f"font-size: 8px; color: {self.theme_manager.get_color('accent')};")
             label.setAlignment(Qt.AlignCenter)
             bar_layout.addWidget(label)
             

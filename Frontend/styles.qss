@@ -1,8 +1,8 @@
 QMainWindow {
-    background-color: #f3f7f6;
+    background-color: #f8fffe;
     font-family: 'Trebuchet MS', sans-serif;
     font-size: 15px;
-    color: #0f1614;
+    color: #0c554a;
 }
 
 /* Sidebar navigation */
@@ -16,7 +16,7 @@ QFrame#sidebar {
 
 QPushButton#navButton {
     background-color: transparent;
-    color: #f3f7f6;
+    color: white;
     text-align: left;
     padding: 12px 20px;
     border: none;
@@ -26,36 +26,36 @@ QPushButton#navButton {
 }
 
 QPushButton#navButton:hover {
-    background-color: #b2a48f;
-    color: #0f1614;
+    background-color: #2e7d32;
+    color: white;
 }
 
 /* Top bar */
 QFrame#topbar {
-    background-color: #f3f7f6;
-    border-bottom: 1px solid #b2a48f;
+    background-color: #f8fffe;
+    border-bottom: 1px solid #e8f4f2;
     padding: 12px 24px;
-    box-shadow: 0 2px 4px rgba(15,22,20,0.08);
+    box-shadow: 0 2px 4px rgba(12,85,74,0.08);
 }
 
 /* Dashboard cards */
 QFrame#card {
-    background-color: #f3f7f6;
+    background-color: white;
     border-radius: 16px;
     padding: 20px;
-    border: 2px solid #b2a48f;
-    box-shadow: 0 2px 8px rgba(15,22,20,0.10);
+    border: 1px solid #e8f4f2;
+    box-shadow: 0 2px 8px rgba(12,85,74,0.10);
     transition: box-shadow 0.2s;
 }
 QFrame#card:hover {
-    box-shadow: 0 4px 16px rgba(15,22,20,0.16);
-    border-color: #0c554a;
+    box-shadow: 0 4px 16px rgba(12,85,74,0.16);
+    border-color: #b2dfdb;
 }
 
 /* Buttons */
 QPushButton {
     background-color: #0c554a;
-    color: #f3f7f6;
+    color: white;
     padding: 12px 24px;
     border-radius: 20px;
     border: none;
@@ -68,19 +68,19 @@ QPushButton {
 }
 
 QPushButton:hover {
-    background-color: #edbc2c;
-    color: #0f1614;
-    box-shadow: 0 4px 8px rgba(237,188,44,0.20);
+    background-color: #2e7d32;
+    color: white;
+    box-shadow: 0 4px 8px rgba(46,125,50,0.20);
 }
 
 /* Input fields */
 QLineEdit {
-    border: 2px solid #b2a48f;
+    border: 2px solid #e8f4f2;
     border-radius: 20px;
     padding: 10px 15px;
     font-size: 14px;
-    background-color: #f3f7f6;
-    color: #0f1614;
+    background-color: white;
+    color: #0c554a;
 }
 
 QLineEdit:focus {
