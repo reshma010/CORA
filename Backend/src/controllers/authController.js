@@ -24,7 +24,16 @@ const register = async (req, res) => {
       return sendError(res, errors.array()[0].msg, 400);
     }
 
-    const { name, email, password } = req.body;
+    const { firstName, lastName, email, password } = req.body;
+
+    // Validate required fields
+    if (!firstName || !lastName) {
+      return sendError(res, 'First name and last name are required', 400);
+    }
+
+    const userFirstName = firstName.trim();
+    const userLastName = lastName.trim();
+    const fullName = `${userFirstName} ${userLastName}`;
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -44,7 +53,8 @@ const register = async (req, res) => {
 
     // Create user with explicit false for email verification
     const userData = {
-      name,
+      firstName: userFirstName,
+      lastName: userLastName,
       email,
       password,
       isEmailVerified: false,  // CRITICAL: Must be false
@@ -76,7 +86,7 @@ const register = async (req, res) => {
 
     // Send verification email
     try {
-      await emailService.sendEmailVerification(email, name, verificationToken);
+      await emailService.sendEmailVerification(email, fullName, verificationToken);
       console.log(`Verification email sent to ${email}`);
     } catch (error) {
       console.error('Failed to send verification email:', error);
@@ -90,7 +100,8 @@ const register = async (req, res) => {
       token,
       user: {
         id: user._id,
-        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
         email: user.email,
         role: user.role,
         isEmailVerified: user.isEmailVerified
@@ -170,7 +181,8 @@ const login = async (req, res) => {
       token,
       user: {
         id: user._id,
-        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
         email: user.email,
         role: user.role,
         lastLogin: user.lastLogin
@@ -201,7 +213,8 @@ const getMe = async (req, res) => {
     sendSuccess(res, 'User profile retrieved', {
       user: {
         id: user._id,
-        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
         email: user.email,
         role: user.role,
         isActive: user.isActive,
@@ -442,7 +455,7 @@ const resendVerification = async (req, res) => {
 
     // Send verification email
     try {
-      await emailService.sendEmailVerification(email, user.name, verificationToken);
+      await emailService.sendEmailVerification(email, `${user.firstName} ${user.lastName}`, verificationToken);
       sendSuccess(res, 'Verification email sent successfully');
     } catch (error) {
       console.error('Failed to send verification email:', error);
@@ -595,7 +608,7 @@ const confirmEmailVerification = async (req, res) => {
     try {
       setTimeout(async () => {
         try {
-          await emailService.sendWelcomeEmail(user.email, user.name);
+          await emailService.sendWelcomeEmail(user.email, `${user.firstName} ${user.lastName}`);
           console.log(`Welcome email sent to ${user.email}`);
         } catch (error) {
           console.error('Failed to send welcome email:', error);
@@ -624,7 +637,7 @@ const confirmEmailVerification = async (req, res) => {
           <div class="logo">CORA</div>
           <div class="success">Email Verified Successfully!</div>
           <div class="message">
-            <p>Hello ${user.name},</p>
+            <p>Hello ${user.firstName} ${user.lastName},</p>
             <p>Email address <strong>${user.email}</strong> has been verified successfully.</p>
             <p>Close this window and return to the CORA application to continue.</p>
           </div>
@@ -673,7 +686,7 @@ const forgotPassword = async (req, res) => {
 
     // Send reset email
     try {
-      await emailService.sendPasswordResetEmail(email, user.name, resetToken);
+      await emailService.sendPasswordResetEmail(email, `${user.firstName} ${user.lastName}`, resetToken);
       console.log(`FORGOT PASSWORD: Reset email sent to ${email}`);
     } catch (error) {
       console.error('FORGOT PASSWORD: Failed to send email:', error);

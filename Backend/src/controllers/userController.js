@@ -59,7 +59,7 @@ const getUser = async (req, res) => {
 // @access  Private
 const updateUser = async (req, res) => {
   try {
-    const { name, email } = req.body;
+    const { firstName, lastName, email } = req.body;
     const userId = req.params.id;
 
     // Check if user is updating their own profile or is admin
@@ -74,7 +74,8 @@ const updateUser = async (req, res) => {
     }
 
     // Update fields
-    if (name) user.name = name;
+    if (firstName) user.firstName = firstName;
+    if (lastName) user.lastName = lastName;
     if (email) user.email = email;
 
     await user.save();
@@ -82,7 +83,8 @@ const updateUser = async (req, res) => {
     sendSuccess(res, 'User updated successfully', {
       user: {
         id: user._id,
-        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
         email: user.email,
         role: user.role,
         isActive: user.isActive
