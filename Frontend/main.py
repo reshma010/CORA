@@ -5,7 +5,6 @@ from PyQt5.QtWidgets import QApplication, QStackedWidget
 from login import LoginPage
 from signup import SignUpPage
 from dashboard import Dashboard
-from activity_page import ActivityPage
 
 # -----------------------------
 # Main application entry point
@@ -27,13 +26,11 @@ main_window.setMinimumSize(800, 600)  # Set minimum size for usability
 login_page = LoginPage(main_window)       # Index 0  -  Login Page
 signup_page = SignUpPage(main_window)     # Index 1  -  Sign-Up Page
 dashboard_page = Dashboard()              # Index 2  -  Dashboard Page
-activity_page = ActivityPage()            # Index 3  -  Activity Logs Page
 
 # Add all pages to the stacked widget
 main_window.addWidget(login_page)
 main_window.addWidget(signup_page)
 main_window.addWidget(dashboard_page)
-main_window.addWidget(activity_page)
 
 # -----------------------------
 # Start application

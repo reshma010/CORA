@@ -5,6 +5,7 @@ from PyQt5.QtGui import *
 from datetime import datetime, timedelta
 import sys
 from api_client import api_client
+from theme_manager import ThemeManager
 
 class RobotWidget(QWidget):
     """
@@ -16,6 +17,7 @@ class RobotWidget(QWidget):
     
     def __init__(self, unit_data, parent=None):
         super().__init__(parent)
+        self.theme_manager = ThemeManager()
         self.unit_data = unit_data
         self.unit_id = unit_data.get('_id', 'unknown')
         self.unit_name = unit_data.get('unit_name', 'Unknown Unit')
@@ -30,101 +32,100 @@ class RobotWidget(QWidget):
     def setup_ui(self):
         """Setup the widget UI"""
         layout = QVBoxLayout(self)
-        layout.setSpacing(8)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
         
-        # Header with robot name
-        header_layout = QHBoxLayout()
-        
-        # Robot icon
-        icon_label = QLabel("")
-        icon_label.setStyleSheet("font-size: 24px;")
-        header_layout.addWidget(icon_label)
-        
-        # Robot name and ID
-        name_layout = QVBoxLayout()
-        
-        self.name_label = QLabel(self.unit_name)
-        self.name_label.setStyleSheet("font-weight: bold; font-size: 14px; color: #2c3e50;")
-        self.name_label.setWordWrap(True)
-        name_layout.addWidget(self.name_label)
-        
-        self.id_label = QLabel(f"ID: {self.unit_id}")
-        self.id_label.setStyleSheet("font-size: 11px; color: #7f8c8d;")
-        name_layout.addWidget(self.id_label)
-        
-        header_layout.addLayout(name_layout)
-        header_layout.addStretch()
-        
-        # Status indicator
-        self.status_indicator = QLabel()
-        self.update_status_indicator()
-        header_layout.addWidget(self.status_indicator)
-        
-        layout.addLayout(header_layout)
-        
-        # Statistics
-        stats_layout = QHBoxLayout()
-        
-        # Packages count
-        packages_widget = self.create_stat_widget("", str(self.packages_count), "Packages")
-        stats_layout.addWidget(packages_widget)
-        
-        # Detections count  
-        detections_widget = self.create_stat_widget("", str(self.total_detections), "Detections")
-        stats_layout.addWidget(detections_widget)
-        
-        # Camera count
-        cameras_widget = self.create_stat_widget("", str(len(self.rtsp_uris)), "Cameras")
-        stats_layout.addWidget(cameras_widget)
-        
-        layout.addLayout(stats_layout)
-        
-        # Last seen
-        last_seen_layout = QHBoxLayout()
-        last_seen_layout.addWidget(QLabel("Last seen:"))
-        
-        self.last_seen_label = QLabel()
-        self.update_last_seen_label()
-        self.last_seen_label.setStyleSheet("color: #34495e; font-weight: bold;")
-        last_seen_layout.addWidget(self.last_seen_label)
-        last_seen_layout.addStretch()
-        
-        layout.addLayout(last_seen_layout)
-        
-        # View details button
-        self.view_button = QPushButton("View Details")
-        self.view_button.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
+        # Main unit ID display - CORA format
+        unit_id_display = self.format_unit_id(self.unit_id)
+        self.unit_id_label = QLabel(unit_id_display)
+        self.unit_id_label.setAlignment(Qt.AlignCenter)
+        self.unit_id_label.setStyleSheet(f"""
+            QLabel {{
+                font-family: 'Trebuchet MS';
+                font-size: 16px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-            QPushButton:pressed {
-                background-color: #21618c;
-            }
+                color: white;
+                background-color: transparent;
+                padding: 8px 12px;
+                border-radius: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.3);
+            }}
         """)
-        self.view_button.clicked.connect(self.on_view_clicked)
-        layout.addWidget(self.view_button)
+        layout.addWidget(self.unit_id_label)
+        
+        # Detection count with icon
+        detection_layout = QHBoxLayout()
+        detection_layout.setAlignment(Qt.AlignCenter)
+        
+        detection_icon = QLabel("")
+        detection_icon.setStyleSheet("font-size: 16px; background-color: transparent;")
+        detection_layout.addWidget(detection_icon)
+        
+        self.detection_count_label = QLabel(f"{self.total_detections}")
+        self.detection_count_label.setStyleSheet(f"""
+            QLabel {{
+                font-family: 'Trebuchet MS';
+                font-size: 20px;
+                font-weight: bold;
+                color: white;
+                background-color: transparent;
+                margin-left: 5px;
+            }}
+        """)
+        detection_layout.addWidget(self.detection_count_label)
+        
+        detection_text = QLabel("Detections")
+        detection_text.setStyleSheet(f"""
+            QLabel {{
+                font-family: 'Trebuchet MS';
+                font-size: 12px;
+                color: rgba(255, 255, 255, 0.8);
+                background-color: transparent;
+                margin-left: 8px;
+            }}
+        """)
+        detection_layout.addWidget(detection_text)
+        
+        layout.addLayout(detection_layout)
+        
+        # Status indicator (subtle)
+        self.status_indicator = QLabel()
+        self.status_indicator.setAlignment(Qt.AlignCenter)
+        self.update_status_indicator()
+        layout.addWidget(self.status_indicator)
+        
+        # Add stretch to push everything to center
+        layout.addStretch()
+        
+    def format_unit_id(self, unit_id):
+        """Format unit ID to CORA-XXXX format"""
+        if not unit_id or unit_id == 'unknown':
+            return "CORA-?????"
+        
+        # If it's already in CORA format, return as is
+        if unit_id.upper().startswith('CORA-'):
+            return unit_id.upper()
+        
+        # If it's a short ID, format as CORA-XXXX
+        if len(unit_id) <= 4:
+            return f"CORA-{unit_id.upper().zfill(4)}"
+        
+        # For longer IDs, take last 4 characters
+        return f"CORA-{unit_id[-4:].upper()}"
         
     def create_stat_widget(self, icon, value, label):
         """Create a small statistics widget"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(2)
-        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(3)
+        layout.setContentsMargins(6, 6, 6, 6)
         
         # Icon and value
         top_layout = QHBoxLayout()
         top_layout.addWidget(QLabel(icon))
         
         value_label = QLabel(value)
-        value_label.setStyleSheet("font-weight: bold; font-size: 14px; color: #2c3e50;")
+        value_label.setStyleSheet(f"font-weight: bold; font-size: 15px; color: {self.theme_manager.get_color('text')}; font-family: Trebuchet MS;")
         top_layout.addWidget(value_label)
         top_layout.addStretch()
         
@@ -132,14 +133,14 @@ class RobotWidget(QWidget):
         
         # Label
         label_widget = QLabel(label)
-        label_widget.setStyleSheet("font-size: 10px; color: #7f8c8d;")
+        label_widget.setStyleSheet(f"font-size: 11px; color: {self.theme_manager.get_color('accent')}; font-family: Trebuchet MS;")
         layout.addWidget(label_widget)
         
-        widget.setStyleSheet("""
-            QWidget {
-                background-color: #ecf0f1;
+        widget.setStyleSheet(f"""
+            QWidget {{
+                background-color: transparent;
                 border-radius: 4px;
-            }
+            }}
         """)
         
         return widget
@@ -147,7 +148,79 @@ class RobotWidget(QWidget):
     def update_status_indicator(self):
         """Update the status indicator based on last seen time"""
         if not self.last_seen:
-            self.status_indicator.setText("")
+            self.status_indicator.setText("●")
+            self.status_indicator.setStyleSheet(f"""
+                QLabel {{
+                    color: rgba(255, 255, 255, 0.7);
+                    font-size: 12px;
+                }}
+            """)
+            return
+        
+        try:
+            # Parse the timestamp
+            if isinstance(self.last_seen, str):
+                # Try different formats
+                try:
+                    last_seen_dt = datetime.fromisoformat(self.last_seen.replace('Z', '+00:00'))
+                except:
+                    try:
+                        last_seen_dt = datetime.strptime(self.last_seen, '%Y-%m-%dT%H:%M:%S.%fZ')
+                    except:
+                        last_seen_dt = datetime.strptime(self.last_seen, '%Y-%m-%dT%H:%M:%SZ')
+            else:
+                last_seen_dt = self.last_seen
+            
+            # Calculate time difference
+            now = datetime.utcnow()
+            time_diff = now - last_seen_dt.replace(tzinfo=None)
+            
+            # Determine status
+            if time_diff < timedelta(minutes=5):
+                # Online
+                self.status_indicator.setText("● Online")
+                self.status_indicator.setStyleSheet(f"""
+                    QLabel {{
+                        color: #4ade80;
+                        font-size: 10px;
+                        font-weight: bold;
+                        font-family: Trebuchet MS;
+                    }}
+                """)
+            elif time_diff < timedelta(hours=1):
+                # Recently active
+                self.status_indicator.setText("● Recent")
+                self.status_indicator.setStyleSheet(f"""
+                    QLabel {{
+                        color: #fbbf24;
+                        font-size: 10px;
+                        font-weight: bold;
+                        font-family: Trebuchet MS;
+                    }}
+                """)
+            else:
+                # Offline
+                self.status_indicator.setText("● Offline")
+                self.status_indicator.setStyleSheet(f"""
+                    QLabel {{
+                        color: rgba(255, 255, 255, 0.6);
+                        font-size: 10px;
+                        font-weight: bold;
+                        font-family: Trebuchet MS;
+                    }}
+                """)
+                
+        except Exception as e:
+            print(f"Error parsing last_seen: {e}")
+            self.status_indicator.setText("● Unknown")
+            self.status_indicator.setStyleSheet(f"""
+                QLabel {{
+                    color: rgba(255, 255, 255, 0.6);
+                    font-size: 10px;
+                    font-weight: bold;
+                    font-family: Trebuchet MS;
+                }}
+            """)
             self.status_indicator.setToolTip("Status: Unknown")
             return
             
@@ -198,33 +271,89 @@ class RobotWidget(QWidget):
     
     def setup_style(self):
         """Setup widget styling"""
+        print(f"DEBUG: Setting robot widget style with green color #0c554a")
+        
+        # Use minimal stylesheet - let paintEvent handle the appearance
         self.setStyleSheet("""
             RobotWidget {
-                background-color: white;
-                border: 2px solid #bdc3c7;
-                border-radius: 8px;
-                padding: 12px;
-            }
-            RobotWidget:hover {
-                border-color: #3498db;
-                background-color: #f8f9fa;
+                background-color: transparent;
+                border: none;
             }
         """)
+        
+        # Set object name for more specific targeting
+        self.setObjectName("robot_widget")
+        
+        # Also set background using palette (alternative method)
+        palette = self.palette()
+        palette.setColor(self.backgroundRole(), QColor("#0c554a"))
+        self.setPalette(palette)
+        self.setAutoFillBackground(True)
         
         # Make the widget clickable
         self.setCursor(Qt.PointingHandCursor)
         
-        # Set fixed size for consistent layout
+        # Set fixed size for consistent layout - larger for better text display
         self.setFixedSize(280, 180)
+        
+        print(f"DEBUG: Widget stylesheet applied: {self.styleSheet()[:100]}...")
+        print(f"DEBUG: Widget palette background: {palette.color(self.backgroundRole()).name()}")
+        
+        # Ensure all child widgets have transparent backgrounds
+        self.setStyleSheet("""
+            RobotWidget {
+                background-color: transparent;
+                border: none;
+            }
+            RobotWidget QLabel {
+                background-color: transparent;
+            }
+            RobotWidget QWidget {
+                background-color: transparent;
+            }
+        """)
+        
+
+    
+    def paintEvent(self, event):
+        """Custom paint event to ensure green background with rounded corners"""
+        from PyQt5.QtGui import QPainter, QBrush, QPen, QPainterPath
+        from PyQt5.QtCore import QRectF
+        
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        
+        # Clear the background first
+        painter.fillRect(self.rect(), QColor(0, 0, 0, 0))  # transparent
+        
+        # Create a rounded rectangle path with proper margins - convert to QRectF
+        rect = QRectF(self.rect().adjusted(1, 1, -1, -1))  # Convert QRect to QRectF
+        path = QPainterPath()
+        path.addRoundedRect(rect, 16.0, 16.0)  # Use float values
+        
+        # Set clipping to the rounded path
+        painter.setClipPath(path)
+        
+        # Fill the clipped area with green color
+        painter.fillRect(self.rect(), QColor("#0c554a"))
+        
+        # Remove clipping and draw the border
+        painter.setClipping(False)
+        painter.setPen(QPen(QColor(255, 255, 255, 51), 1))
+        painter.setBrush(QBrush(QColor(0, 0, 0, 0)))  # No fill, just border
+        painter.drawRoundedRect(rect, 16.0, 16.0)  # Use float values
         
     def on_view_clicked(self):
         """Handle view details button click"""
-        self.robot_clicked.emit(self.unit_id, self.unit_name)
+        formatted_id = self.format_unit_id(self.unit_id)
+        self.robot_clicked.emit(self.unit_id, formatted_id)
         
     def mousePressEvent(self, event):
         """Handle mouse press on the widget"""
         if event.button() == Qt.LeftButton:
-            self.robot_clicked.emit(self.unit_id, self.unit_name)
+            formatted_id = self.format_unit_id(self.unit_id)
+            self.robot_clicked.emit(self.unit_id, formatted_id)
         super().mousePressEvent(event)
 
 
@@ -237,6 +366,7 @@ class RobotGridWidget(QScrollArea):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.theme_manager = ThemeManager()
         self.robots_data = []
         self.robot_widgets = []
         
@@ -248,7 +378,7 @@ class RobotGridWidget(QScrollArea):
         scroll_widget = QWidget()
         self.setWidget(scroll_widget)
         self.setWidgetResizable(True)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         
         # Create grid layout
@@ -261,24 +391,39 @@ class RobotGridWidget(QScrollArea):
         self.grid_layout.setColumnStretch(0, 1)
         
         # Style the scroll area
-        self.setStyleSheet("""
-            QScrollArea {
+        self.setStyleSheet(f"""
+            QScrollArea {{
                 border: none;
-                background-color: #f5f6fa;
-            }
-            QScrollBar:vertical {
-                background-color: #ecf0f1;
+                background-color: {self.theme_manager.get_color('background')};
+                border-radius: 8px;
+            }}
+            QScrollBar:vertical {{
+                border: none;
+                background: {self.theme_manager.get_color('surface')};
                 width: 12px;
                 border-radius: 6px;
-            }
-            QScrollBar::handle:vertical {
-                background-color: #bdc3c7;
+                margin: 2px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: {self.theme_manager.get_color('primary')};
                 border-radius: 6px;
                 min-height: 20px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background-color: #95a5a6;
-            }
+                margin: 2px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: {self.theme_manager.get_color('primary_hover')};
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                border: none;
+                background: none;
+                height: 0px;
+            }}
+            QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical {{
+                background: none;
+            }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+                background: none;
+            }}
         """)
         
     def update_robots(self, robots_data):
@@ -291,7 +436,7 @@ class RobotGridWidget(QScrollArea):
             return
             
         # Calculate grid dimensions
-        columns = max(1, self.width() // 300)  # Adjust based on widget width
+        columns = max(1, self.width() // 320)  # Adjust based on widget width (280px + margins)
         
         # Add robot widgets to grid
         for i, robot_data in enumerate(robots_data):
@@ -327,17 +472,17 @@ class RobotGridWidget(QScrollArea):
         
         icon_label = QLabel("")
         icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setStyleSheet("font-size: 48px; color: #bdc3c7;")
+        icon_label.setStyleSheet(f"font-size: 48px; color: {self.theme_manager.get_color('accent')};")
         layout.addWidget(icon_label)
         
         text_label = QLabel("No Robot Units Found")
         text_label.setAlignment(Qt.AlignCenter)
-        text_label.setStyleSheet("font-size: 18px; color: #7f8c8d; font-weight: bold;")
+        text_label.setStyleSheet(f"font-size: 18px; color: {self.theme_manager.get_color('text')}; font-weight: bold; font-family: Trebuchet MS;")
         layout.addWidget(text_label)
         
         subtext_label = QLabel("Robot units appear here when they send detection data")
         subtext_label.setAlignment(Qt.AlignCenter)
-        subtext_label.setStyleSheet("font-size: 12px; color: #95a5a6;")
+        subtext_label.setStyleSheet(f"font-size: 12px; color: {self.theme_manager.get_color('accent')}; font-family: Trebuchet MS;")
         subtext_label.setWordWrap(True)
         layout.addWidget(subtext_label)
         

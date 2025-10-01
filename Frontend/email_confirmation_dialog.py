@@ -4,6 +4,7 @@ from PyQt5.QtGui import QFont, QPixmap
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from icon_utils import IconManager
 from api_client import api_client
+from theme_manager import ThemeManager
 
 class EmailConfirmationDialog(QDialog):
     # Signal emitted when email is verified
@@ -13,6 +14,7 @@ class EmailConfirmationDialog(QDialog):
         super().__init__(parent)
         self.user_name = user_name
         self.user_email = user_email
+        self.theme_manager = ThemeManager()
         self.setWindowTitle("Email Verification")
         self.setFixedSize(500, 450)
         self.setModal(True)
@@ -41,7 +43,7 @@ class EmailConfirmationDialog(QDialog):
         else:
             logo_label.setText("CORA")
             logo_label.setFont(QFont("Trebuchet MS", 24, QFont.Bold))
-            logo_label.setStyleSheet("color: #0c554a; background-color: transparent;")
+            logo_label.setStyleSheet(f"color: {self.theme_manager.get_color('primary')}; background-color: transparent;")
         logo_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(logo_label)
         
@@ -49,25 +51,25 @@ class EmailConfirmationDialog(QDialog):
         success_label = QLabel("Account Created Successfully!")
         success_label.setFont(QFont("Trebuchet MS", 20, QFont.Bold))
         success_label.setAlignment(Qt.AlignCenter)
-        success_label.setStyleSheet("color: #0c554a; margin-bottom: 10px;")
+        success_label.setStyleSheet(f"color: {self.theme_manager.get_color('primary')}; margin-bottom: 10px;")
         main_layout.addWidget(success_label)
         
         # Welcome message
         welcome_label = QLabel(f"Welcome to CORA, {self.user_name}!")
         welcome_label.setFont(QFont("Trebuchet MS", 14))
         welcome_label.setAlignment(Qt.AlignCenter)
-        welcome_label.setStyleSheet("color: #0f1614; margin-bottom: 15px;")
+        welcome_label.setStyleSheet(f"color: {self.theme_manager.get_color('text')}; margin-bottom: 15px;")
         main_layout.addWidget(welcome_label)
         
         # Email verification info card
         info_card = QFrame()
-        info_card.setStyleSheet("""
-            QFrame {
-                background-color: #edbc2c;
+        info_card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {self.theme_manager.get_color('secondary')};
                 border-radius: 15px;
                 padding: 20px;
                 margin: 10px 0px;
-            }
+            }}
         """)
         
         card_layout = QVBoxLayout(info_card)
@@ -77,20 +79,20 @@ class EmailConfirmationDialog(QDialog):
         email_title = QLabel("Email Verification Required")
         email_title.setFont(QFont("Trebuchet MS", 16, QFont.Bold))
         email_title.setAlignment(Qt.AlignCenter)
-        email_title.setStyleSheet("color: #0f1614;")
+        email_title.setStyleSheet(f"color: {self.theme_manager.get_color('text')};")
         card_layout.addWidget(email_title)
         
         # Email address
         email_address_label = QLabel(f"Verification email sent to:")
         email_address_label.setFont(QFont("Trebuchet MS", 12))
         email_address_label.setAlignment(Qt.AlignCenter)
-        email_address_label.setStyleSheet("color: #0f1614;")
+        email_address_label.setStyleSheet(f"color: {self.theme_manager.get_color('text')};")
         card_layout.addWidget(email_address_label)
         
         email_label = QLabel(self.user_email)
         email_label.setFont(QFont("Trebuchet MS", 14, QFont.Bold))
         email_label.setAlignment(Qt.AlignCenter)
-        email_label.setStyleSheet("color: #0c554a;")
+        email_label.setStyleSheet(f"color: {self.theme_manager.get_color('primary')};")
         card_layout.addWidget(email_label)
         
         # Instructions
@@ -98,7 +100,7 @@ class EmailConfirmationDialog(QDialog):
         instructions.setFont(QFont("Trebuchet MS", 11))
         instructions.setAlignment(Qt.AlignCenter)
         instructions.setWordWrap(True)
-        instructions.setStyleSheet("color: #0f1614; margin-top: 5px;")
+        instructions.setStyleSheet(f"color: {self.theme_manager.get_color('text')}; margin-top: 5px;")
         card_layout.addWidget(instructions)
         
         main_layout.addWidget(info_card)
@@ -107,7 +109,7 @@ class EmailConfirmationDialog(QDialog):
         self.status_label = QLabel("Waiting for email verification...")
         self.status_label.setFont(QFont("Trebuchet MS", 12))
         self.status_label.setAlignment(Qt.AlignCenter)
-        self.status_label.setStyleSheet("color: #b2a48f; margin: 10px 0px;")
+        self.status_label.setStyleSheet(f"color: {self.theme_manager.get_color('accent')}; margin: 10px 0px;")
         main_layout.addWidget(self.status_label)
         
         # Note about staying on this page
@@ -115,7 +117,7 @@ class EmailConfirmationDialog(QDialog):
         note_label.setFont(QFont("Trebuchet MS", 10))
         note_label.setAlignment(Qt.AlignCenter)
         note_label.setWordWrap(True)
-        note_label.setStyleSheet("color: #b2a48f; margin-top: 5px;")
+        note_label.setStyleSheet(f"color: {self.theme_manager.get_color('accent')}; margin-top: 5px;")
         main_layout.addWidget(note_label)
         
         # Buttons
@@ -245,24 +247,25 @@ class EmailConfirmationDialog(QDialog):
             """)
     
     def load_styles(self):
-        return """
-        QDialog {
-            background-color: #f3f7f6;
-        }
-        QPushButton {
-            background-color: #b2a48f;
-            color: #f3f7f6;
+        return f"""
+        QDialog {{
+            background-color: {self.theme_manager.get_color('background')};
+        }}
+        QPushButton {{
+            background-color: {self.theme_manager.get_color('accent')};
+            color: {self.theme_manager.get_color('text')};
             font-size: 14px;
             font-weight: 500;
             padding: 12px 20px;
             border-radius: 22px;
             border: none;
-        }
-        QPushButton:hover {
-            background-color: #999;
-        }
-        QPushButton:disabled {
-            background-color: #ccc;
-            color: #666;
-        }
+            font-family: Trebuchet MS;
+        }}
+        QPushButton:hover {{
+            background-color: {self.theme_manager.get_color('accent_dark', '#999')};
+        }}
+        QPushButton:disabled {{
+            background-color: {self.theme_manager.get_color('disabled', '#ccc')};
+            color: {self.theme_manager.get_color('disabled_text', '#666')};
+        }}
         """

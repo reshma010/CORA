@@ -5,11 +5,13 @@ import re
 from icon_utils import IconManager
 from api_client import api_client
 from email_confirmation_dialog import EmailConfirmationDialog
+from theme_manager import ThemeManager
 
 class SignUpPage(QWidget):
     def __init__(self, stacked_widget):
         super().__init__()
         self.stacked_widget = stacked_widget  # Reference to QStackedWidget (to switch between pages)
+        self.theme_manager = ThemeManager()
         self.setStyleSheet(self.load_styles())  # apply custom stylesheet
 
         # ---------------- Main Layout ----------------
@@ -30,13 +32,13 @@ class SignUpPage(QWidget):
             # Fallback to text if image can't be loaded
             self.logo_label.setText("CORA")
             self.logo_label.setFont(QFont("Trebuchet MS", 50, QFont.Bold))
-            self.logo_label.setStyleSheet("""
-                QLabel {
-                    background-color: #0c554a;
-                    color: #f3f7f6;
+            self.logo_label.setStyleSheet(f"""
+                QLabel {{
+                    background-color: {self.theme_manager.get_color('primary')};
+                    color: {self.theme_manager.get_color('text')};
                     border-radius: 16px;
                     padding: 20px;
-                }
+                }}
             """)
         self.logo_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.logo_label, 0, Qt.AlignCenter)
@@ -45,15 +47,27 @@ class SignUpPage(QWidget):
         layout.addSpacerItem(QSpacerItem(20, 8, QSizePolicy.Minimum, QSizePolicy.Fixed))
 
         # ---------------- Name Input ----------------
-        self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("Full Name")
-        self.name_input.setFixedHeight(40)           # consistent height
-        self.name_input.setFixedWidth(350)           # make it less wide
-        layout.addWidget(self.name_input, 0, Qt.AlignCenter)
+        name_layout = QHBoxLayout()
+        name_layout.setSpacing(10)
+        name_layout.setAlignment(Qt.AlignCenter)
+        
+        self.first_name_input = QLineEdit()
+        self.first_name_input.setPlaceholderText("First Name *")
+        self.first_name_input.setFixedHeight(40)
+        self.first_name_input.setFixedWidth(170)  # Half the width with some spacing
+        name_layout.addWidget(self.first_name_input)
+        
+        self.last_name_input = QLineEdit()
+        self.last_name_input.setPlaceholderText("Last Name *")
+        self.last_name_input.setFixedHeight(40)
+        self.last_name_input.setFixedWidth(170)  # Half the width with some spacing
+        name_layout.addWidget(self.last_name_input)
+        
+        layout.addLayout(name_layout)
 
         # ---------------- Email Input ----------------
         self.email_input = QLineEdit()
-        self.email_input.setPlaceholderText("Email (@wayne.edu)")
+        self.email_input.setPlaceholderText("Email (@wayne.edu) *")
         self.email_input.setFixedHeight(40)           # consistent height
         self.email_input.setFixedWidth(350)           # make it less wide
         layout.addWidget(self.email_input, 0, Qt.AlignCenter)
@@ -66,7 +80,7 @@ class SignUpPage(QWidget):
         pw_row.setSpacing(0)
         
         self.password_input = QLineEdit()
-        self.password_input.setPlaceholderText("Password")
+        self.password_input.setPlaceholderText("Password *")
         self.password_input.setEchoMode(QLineEdit.Password)  # Hide characters when typing
         self.password_input.setFixedHeight(40)
         self.password_input.setFixedWidth(300)  # make it less wide to accommodate the button
@@ -88,7 +102,7 @@ class SignUpPage(QWidget):
         
         # Character counter
         self.char_counter = QLabel("20 characters remaining")
-        self.char_counter.setStyleSheet("color: #b2a48f; font-size: 12px; background-color: transparent;")
+        self.char_counter.setStyleSheet(f"color: {self.theme_manager.get_color('accent')}; font-size: 12px; background-color: transparent; font-family: Trebuchet MS;")
         pw_layout.addWidget(self.char_counter)
         
         # Password requirements with better spacing
@@ -97,24 +111,28 @@ class SignUpPage(QWidget):
         requirements_layout.setContentsMargins(0, 2, 0, 0)  # Minimal top margin
         
         self.req_length = QLabel("• At least 10 characters")
-        self.req_length.setStyleSheet("color: #edbc2c; font-size: 12px; background-color: transparent;")
+        self.req_length.setStyleSheet(f"color: {self.theme_manager.get_color('accent')}; font-size: 12px; background-color: transparent; font-family: Trebuchet MS;")
         requirements_layout.addWidget(self.req_length)
         
         self.req_special = QLabel("• At least one special character")
-        self.req_special.setStyleSheet("color: #edbc2c; font-size: 12px; background-color: transparent;")
+        self.req_special.setStyleSheet(f"color: {self.theme_manager.get_color('accent')}; font-size: 12px; background-color: transparent; font-family: Trebuchet MS;")
         requirements_layout.addWidget(self.req_special)
         
         self.req_capital = QLabel("• At least one capital letter")
-        self.req_capital.setStyleSheet("color: #edbc2c; font-size: 12px; background-color: transparent;")
+        self.req_capital.setStyleSheet(f"color: {self.theme_manager.get_color('accent')}; font-size: 12px; background-color: transparent; font-family: Trebuchet MS;")
         requirements_layout.addWidget(self.req_capital)
         
+        self.req_lowercase = QLabel("• At least one lowercase letter")
+        self.req_lowercase.setStyleSheet(f"color: {self.theme_manager.get_color('accent')}; font-size: 12px; background-color: transparent; font-family: Trebuchet MS;")
+        requirements_layout.addWidget(self.req_lowercase)
+        
         self.req_number = QLabel("• At least one number")
-        self.req_number.setStyleSheet("color: #edbc2c; font-size: 12px; background-color: transparent;")
+        self.req_number.setStyleSheet(f"color: {self.theme_manager.get_color('accent')}; font-size: 12px; background-color: transparent; font-family: Trebuchet MS;")
         requirements_layout.addWidget(self.req_number)
         
         # Password match requirement
         self.req_match = QLabel("• Passwords must match")
-        self.req_match.setStyleSheet("color: #edbc2c; font-size: 12px; background-color: transparent;")
+        self.req_match.setStyleSheet(f"color: {self.theme_manager.get_color('accent')}; font-size: 12px; background-color: transparent; font-family: Trebuchet MS;")
         requirements_layout.addWidget(self.req_match)
         
         pw_layout.addLayout(requirements_layout)
@@ -129,7 +147,7 @@ class SignUpPage(QWidget):
         confirm_pw_row.setSpacing(0)
         
         self.confirm_password_input = QLineEdit()
-        self.confirm_password_input.setPlaceholderText("Confirm Password")
+        self.confirm_password_input.setPlaceholderText("Confirm Password *")
         self.confirm_password_input.setEchoMode(QLineEdit.Password)  # Hide characters when typing
         self.confirm_password_input.setFixedHeight(40)
         self.confirm_password_input.setFixedWidth(300)  # make it less wide to accommodate the button
@@ -192,41 +210,47 @@ class SignUpPage(QWidget):
         # Update character counter
         if remaining == 0:
             self.char_counter.setText("Maximum length reached")
-            self.char_counter.setStyleSheet("color: #edbc2c; font-size: 12px; background-color: transparent;")
+            self.char_counter.setStyleSheet(f"color: {self.theme_manager.get_color('secondary')}; font-size: 12px; background-color: transparent; font-family: Trebuchet MS;")
         else:
             self.char_counter.setText(f"{remaining} characters remaining")
-            self.char_counter.setStyleSheet("color: #b2a48f; font-size: 12px; background-color: transparent;")
+            self.char_counter.setStyleSheet(f"color: {self.theme_manager.get_color('accent')}; font-size: 12px; background-color: transparent; font-family: Trebuchet MS;")
         
         # Check length requirement (at least 10 characters)
         if count >= 10:
-            self.req_length.setStyleSheet("color: #0c554a; font-size: 12px; background-color: transparent;")
+            self.req_length.setStyleSheet(f"color: {self.theme_manager.get_color('primary')}; font-size: 12px; background-color: transparent; font-family: Trebuchet MS;")
         else:
-            self.req_length.setStyleSheet("color: #edbc2c; font-size: 12px; background-color: transparent;")
+            self.req_length.setStyleSheet(f"color: {self.theme_manager.get_color('secondary')}; font-size: 12px; background-color: transparent; font-family: Trebuchet MS;")
         
         # Check special character requirement
         if re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
-            self.req_special.setStyleSheet("color: #0c554a; font-size: 12px; background-color: transparent;")
+            self.req_special.setStyleSheet(f"color: {self.theme_manager.get_color('primary')}; font-size: 12px; background-color: transparent; font-family: Trebuchet MS;")
         else:
-            self.req_special.setStyleSheet("color: #edbc2c; font-size: 12px; background-color: transparent;")
+            self.req_special.setStyleSheet(f"color: {self.theme_manager.get_color('secondary')}; font-size: 12px; background-color: transparent; font-family: Trebuchet MS;")
         
         # Check capital letter requirement
         if re.search(r'[A-Z]', password):
-            self.req_capital.setStyleSheet("color: #0c554a; font-size: 12px; background-color: transparent;")
+            self.req_capital.setStyleSheet(f"color: {self.theme_manager.get_color('primary')}; font-size: 12px; background-color: transparent; font-family: Trebuchet MS;")
         else:
-            self.req_capital.setStyleSheet("color: #edbc2c; font-size: 12px; background-color: transparent;")
+            self.req_capital.setStyleSheet(f"color: {self.theme_manager.get_color('secondary')}; font-size: 12px; background-color: transparent; font-family: Trebuchet MS;")
+        
+        # Check lowercase letter requirement
+        if re.search(r'[a-z]', password):
+            self.req_lowercase.setStyleSheet(f"color: {self.theme_manager.get_color('primary')}; font-size: 12px; background-color: transparent; font-family: Trebuchet MS;")
+        else:
+            self.req_lowercase.setStyleSheet(f"color: {self.theme_manager.get_color('secondary')}; font-size: 12px; background-color: transparent; font-family: Trebuchet MS;")
         
         # Check number requirement
         if re.search(r'[0-9]', password):
-            self.req_number.setStyleSheet("color: #0c554a; font-size: 12px; background-color: transparent;")
+            self.req_number.setStyleSheet(f"color: {self.theme_manager.get_color('primary')}; font-size: 12px; background-color: transparent; font-family: Trebuchet MS;")
         else:
-            self.req_number.setStyleSheet("color: #edbc2c; font-size: 12px; background-color: transparent;")
+            self.req_number.setStyleSheet(f"color: {self.theme_manager.get_color('secondary')}; font-size: 12px; background-color: transparent; font-family: Trebuchet MS;")
         
         # Check password match requirement
         confirm_password = self.confirm_password_input.text()
         if password and confirm_password and password == confirm_password:
-            self.req_match.setStyleSheet("color: #0c554a; font-size: 12px; background-color: transparent;")
+            self.req_match.setStyleSheet(f"color: {self.theme_manager.get_color('primary')}; font-size: 12px; background-color: transparent; font-family: Trebuchet MS;")
         else:
-            self.req_match.setStyleSheet("color: #edbc2c; font-size: 12px; background-color: transparent;")
+            self.req_match.setStyleSheet(f"color: {self.theme_manager.get_color('secondary')}; font-size: 12px; background-color: transparent; font-family: Trebuchet MS;")
 
     def is_password_valid(self):
         password = self.password_input.text()
@@ -235,25 +259,28 @@ class SignUpPage(QWidget):
                 len(password) <= 20 and
                 re.search(r'[!@#$%^&*(),.?":{}|<>]', password) and
                 re.search(r'[A-Z]', password) and
+                re.search(r'[a-z]', password) and
                 re.search(r'[0-9]', password) and
                 password == confirm_password)
 
     #Methods
     def signup_user(self):
         """Handles user sign-up using the backend API."""
-        name = self.name_input.text().strip()
+        first_name = self.first_name_input.text().strip()
+        last_name = self.last_name_input.text().strip()
+        name = f"{first_name} {last_name}".strip()
         email = self.email_input.text().strip()
         password = self.password_input.text()
         confirm_password = self.confirm_password_input.text()
 
         # Validation: fields cannot be empty
-        if not name or not email or not password or not confirm_password:
+        if not first_name or not last_name or not email or not password or not confirm_password:
             QMessageBox.warning(self, "Error", "Please fill all fields.")
             return
 
-        # Validation: name must be at least 2 characters
-        if len(name) < 2:
-            QMessageBox.warning(self, "Error", "Name must be at least 2 characters long.")
+        # Validation: first and last name must be at least 2 characters each
+        if len(first_name) < 2 or len(last_name) < 2:
+            QMessageBox.warning(self, "Error", "First and last name must each be at least 2 characters long.")
             return
         
         # Validation: passwords must match
@@ -267,7 +294,7 @@ class SignUpPage(QWidget):
             return
 
         # Call backend API for registration
-        success, message, data = api_client.register(name, email, password)
+        success, message, data = api_client.register(first_name, last_name, email, password)
         
         if success:
             # Show email confirmation dialog
@@ -279,13 +306,19 @@ class SignUpPage(QWidget):
             self.show_email_confirmation_dialog(user_name, user_email)
             
             # Clear form fields after showing dialog
-            self.name_input.clear()
+            self.first_name_input.clear()
+            self.last_name_input.clear()
             self.email_input.clear()
             self.password_input.clear()
             self.confirm_password_input.clear()
             
             # Automatically log in user (redirect to dashboard)
             self.stacked_widget.setCurrentIndex(2)  # Go directly to dashboard
+            
+            # Reset dashboard to main welcome page
+            dashboard = self.stacked_widget.widget(2)
+            if hasattr(dashboard, 'reset_to_dashboard'):
+                dashboard.reset_to_dashboard()
         else:
             QMessageBox.warning(self, "Registration Error", message)
 
@@ -317,6 +350,11 @@ class SignUpPage(QWidget):
                 
                 # Switch to dashboard page (index 2)
                 self.stacked_widget.setCurrentIndex(2)
+                
+                # Reset dashboard to main welcome page
+                dashboard = self.stacked_widget.widget(2)
+                if hasattr(dashboard, 'reset_to_dashboard'):
+                    dashboard.reset_to_dashboard()
             else:
                 # Login failed for some reason, just show success message
                 QMessageBox.information(self, "Email Verified", 
@@ -331,35 +369,38 @@ class SignUpPage(QWidget):
     # ---------------- Stylesheet ----------------
     def load_styles(self):
         # Defines styling for all widgets on the signup page
-        return """
-        QWidget {
-            background-color: #f3f7f6;
-        }
-        QLineEdit {
-            border: 2px solid #b2a48f;
+        return f"""
+        QWidget {{
+            background-color: {self.theme_manager.get_color('background')};
+            font-family: 'Trebuchet MS';
+        }}
+        QLineEdit {{
+            border: 2px solid {self.theme_manager.get_color('accent')};
             border-radius: 20px;
             padding: 10px 15px;
             font-size: 14px;
-            background-color: #f3f7f6;
-            color: #0f1614;
-        }
-        QLineEdit:focus {
-            border: 2px solid #0c554a;
-        }
-        QPushButton {
-            background-color: #0c554a;
-            color: #f3f7f6;
+            background-color: {self.theme_manager.get_color('background')};
+            color: {self.theme_manager.get_color('text')};
+        }}
+        QLineEdit:focus {{
+            border: 2px solid {self.theme_manager.get_color('primary')};
+        }}
+        QPushButton {{
+            background-color: {self.theme_manager.get_color('primary')};
+            color: {self.theme_manager.get_color('text')};
             font-size: 15px;
             font-weight: 500;
             padding: 12px 20px;
             border-radius: 20px;
             border: none;
-        }
-        QPushButton:hover {
-            background-color: #edbc2c;
-            color: #0f1614;
-        }
-        QLabel {
-            color: #0f1614;
-        }
+            font-family: 'Trebuchet MS';
+        }}
+        QPushButton:hover {{
+            background-color: {self.theme_manager.get_color('secondary')};
+            color: {self.theme_manager.get_color('text')};
+        }}
+        QLabel {{
+            color: {self.theme_manager.get_color('text')};
+            font-family: 'Trebuchet MS';
+        }}
         """

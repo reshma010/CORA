@@ -4,11 +4,13 @@ from PyQt5.QtGui import QFont, QPixmap
 from PyQt5.QtCore import Qt
 from icon_utils import IconManager
 from api_client import api_client
+from theme_manager import ThemeManager
 
 class LoginPage(QWidget):
     def __init__(self, stacked_widget):
         super().__init__()
         self.stacked_widget = stacked_widget  # reference to QStackedWidget for navigation
+        self.theme_manager = ThemeManager()
         self.setStyleSheet(self.load_styles())  # apply custom stylesheet
 
         # ---------------- Main Layout ----------------
@@ -29,13 +31,13 @@ class LoginPage(QWidget):
             # Fallback to text if image can't be loaded
             self.logo_label.setText("CORA")
             self.logo_label.setFont(QFont("Trebuchet MS", 50, QFont.Bold))
-            self.logo_label.setStyleSheet("""
-                QLabel {
-                    background-color: #0c554a;
-                    color: #f3f7f6;
+            self.logo_label.setStyleSheet(f"""
+                QLabel {{
+                    background-color: {self.theme_manager.get_color('primary')};
+                    color: {self.theme_manager.get_color('text')};
                     border-radius: 16px;
                     padding: 20px;
-                }
+                }}
             """)
         self.logo_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.logo_label, 0, Qt.AlignCenter)
@@ -150,6 +152,12 @@ class LoginPage(QWidget):
                 print(" LOGIN: About to navigate to dashboard...")
                 # Navigate to dashboard page
                 self.stacked_widget.setCurrentIndex(2)
+                
+                # Reset dashboard to main welcome page
+                dashboard = self.stacked_widget.widget(2)
+                if hasattr(dashboard, 'reset_to_dashboard'):
+                    dashboard.reset_to_dashboard()
+                
                 print(" LOGIN: Navigation completed successfully!")
             else:
                 print(f" LOGIN: Login failed - {message}")
@@ -783,47 +791,51 @@ class LoginPage(QWidget):
     # ---------------- Stylesheet ----------------
     def load_styles(self):
         # Defines styling for all widgets on the login page
-        return """
-        QWidget {
-            background-color: #f3f7f6;
-        }
-        QLineEdit {
-            border: 2px solid #b2a48f;
+        return f"""
+        QWidget {{
+            background-color: {self.theme_manager.get_color('background')};
+        }}
+        QLineEdit {{
+            border: 2px solid {self.theme_manager.get_color('accent')};
             border-radius: 20px;
             padding: 10px 15px;
             font-size: 14px;
-            background-color: #f3f7f6;
-            color: #0f1614;
-        }
-        QLineEdit:focus {
-            border: 2px solid #0c554a;
-        }
-        QPushButton {
-            background-color: #0c554a;
-            color: #f3f7f6;
+            background-color: {self.theme_manager.get_color('background')};
+            color: {self.theme_manager.get_color('text')};
+            font-family: Trebuchet MS;
+        }}
+        QLineEdit:focus {{
+            border: 2px solid {self.theme_manager.get_color('primary')};
+        }}
+        QPushButton {{
+            background-color: {self.theme_manager.get_color('primary')};
+            color: {self.theme_manager.get_color('text')};
             font-size: 15px;
             font-weight: 500;
             padding: 12px 20px;
             border-radius: 20px;
             border: none;
-        }
-        QPushButton:hover {
-            background-color: #edbc2c;
-            color: #0f1614;
-        }
-        QPushButton#forgotPasswordButton {
+            font-family: Trebuchet MS;
+        }}
+        QPushButton:hover {{
+            background-color: {self.theme_manager.get_color('secondary')};
+            color: {self.theme_manager.get_color('text')};
+        }}
+        QPushButton#forgotPasswordButton {{
             background-color: transparent;
-            color: #0c554a;
+            color: {self.theme_manager.get_color('primary')};
             text-decoration: underline;
             border: none;
             padding: 5px;
             font-size: 13px;
-        }
-        QPushButton#forgotPasswordButton:hover {
-            color: #edbc2c;
+            font-family: Trebuchet MS;
+        }}
+        QPushButton#forgotPasswordButton:hover {{
+            color: {self.theme_manager.get_color('secondary')};
             background-color: transparent;
-        }
-        QLabel {
-            color: #0f1614;
-        }
+        }}
+        QLabel {{
+            color: {self.theme_manager.get_color('text')};
+            font-family: Trebuchet MS;
+        }}
         """

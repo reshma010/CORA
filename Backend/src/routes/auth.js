@@ -11,10 +11,14 @@ console.log(' AUTH ROUTES: resetPassword function loaded:', typeof resetPassword
 
 // Validation rules
 const registerValidation = [
-  body('name')
+  body('firstName')
     .trim()
-    .isLength({ min: 2, max: 50 })
-    .withMessage('Name must be between 2 and 50 characters'),
+    .isLength({ min: 2, max: 25 })
+    .withMessage('First name must be between 2 and 25 characters'),
+  body('lastName')
+    .trim()
+    .isLength({ min: 2, max: 25 })
+    .withMessage('Last name must be between 2 and 25 characters'),
   body('email')
     .isEmail()
     .normalizeEmail()

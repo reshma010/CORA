@@ -24,12 +24,13 @@ class APIClient:
         if 'Authorization' in self.session.headers:
             del self.session.headers['Authorization']
     
-    def register(self, name: str, email: str, password: str) -> Tuple[bool, str, Dict[str, Any]]:
+    def register(self, first_name: str, last_name: str, email: str, password: str) -> Tuple[bool, str, Dict[str, Any]]:
         """
         Register a new user
         
         Args:
-            name: User's full name
+            first_name: User's first name
+            last_name: User's last name
             email: User's email (must be @wayne.edu)
             password: User's password
             
@@ -44,11 +45,13 @@ class APIClient:
             response = self.session.post(
                 f"{self.base_url}/api/auth/register",
                 json={
-                    "name": name,
+                    "firstName": first_name,
+                    "lastName": last_name,
                     "email": email,
                     "password": password
                 },
-                headers={'Content-Type': 'application/json'}
+                headers={'Content-Type': 'application/json'},
+                timeout=30  # 30 second timeout
             )
             
             data = response.json()
@@ -57,12 +60,21 @@ class APIClient:
                 # Store the token for authenticated requests
                 if 'data' in data and 'token' in data['data']:
                     self.set_auth_token(data['data']['token'])
-                return True, data.get('message', 'Registration successful'), data.get('data', {})
+                return True, data.get('message', 'Registration successful! Please check your email for verification.'), data.get('data', {})
+            elif response.status_code == 500:
+                # Check if it's an email service error
+                error_msg = data.get('message', '').lower()
+                if 'timeout' in error_msg or 'etimedout' in error_msg or 'smtp' in error_msg:
+                    return False, "Registration completed but verification email could not be sent due to email service issues. You can try resending the verification email later.", {}
+                else:
+                    return False, data.get('message', 'Registration failed due to server error'), {}
             else:
                 return False, data.get('message', 'Registration failed'), {}
                 
+        except requests.exceptions.Timeout:
+            return False, "Registration request timed out. Please try again.", {}
         except requests.exceptions.ConnectionError:
-            return False, "Cannot connect to server. Please ensure the backend is running.", {}
+            return False, "Cannot connect to server. Please check your internet connection.", {}
         except requests.exceptions.RequestException as e:
             return False, f"Network error: {str(e)}", {}
         except json.JSONDecodeError:
@@ -176,22 +188,32 @@ class APIClient:
             response = self.session.post(
                 f"{self.base_url}/api/auth/resend-verification",
                 json={"email": email},
-                headers={'Content-Type': 'application/json'}
+                headers={'Content-Type': 'application/json'},
+                timeout=30  # 30 second timeout
             )
             
             data = response.json()
             
             if response.status_code == 200:
-                return True, data.get('message', 'Verification email sent'), data.get('data', {})
+                return True, data.get('message', 'Verification email sent successfully!'), data.get('data', {})
+            elif response.status_code == 500:
+                # Check if it's an email service error
+                error_msg = data.get('message', '').lower()
+                if 'timeout' in error_msg or 'etimedout' in error_msg or 'smtp' in error_msg:
+                    return False, "Email service temporarily unavailable. The server is experiencing issues with the email provider. Please try again later or contact support.", {}
+                else:
+                    return False, data.get('message', 'Server error occurred while sending email'), {}
             else:
                 return False, data.get('message', 'Failed to send verification email'), {}
                 
+        except requests.exceptions.Timeout:
+            return False, "Request timed out. The email service may be experiencing issues. Please try again later.", {}
         except requests.exceptions.ConnectionError:
-            return False, "Cannot connect to server. Please ensure the backend is running.", {}
+            return False, "Cannot connect to server. Please check your internet connection and try again.", {}
         except requests.exceptions.RequestException as e:
             return False, f"Network error: {str(e)}", {}
         except json.JSONDecodeError:
-            return False, "Invalid response from server", {}
+            return False, "Invalid response from server. Please try again.", {}
     
     def get_robots(self) -> Tuple[bool, str, Dict[str, Any]]:
         """
